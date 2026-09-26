@@ -41,9 +41,11 @@ export interface AnalysisRequestError {
 }
 
 interface DemoContextValue {
+  selectedFiles: File[];
   selectedFile: File | null;
   previewUrl: string | null;
   mediaKind: "image" | "video" | null;
+  setMediaFiles: (files: File[]) => void;
   setMediaFile: (file: File | null) => void;
   candidates: Candidate[];
   selectedCandidateId: string;
@@ -258,6 +260,7 @@ function createDraft(candidate: Candidate, isDemo = true): ReportDraft {
 const DemoContext = createContext<DemoContextValue | null>(null);
 
 export function DemoProvider({ children }: { children: ReactNode }) {
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
@@ -388,7 +391,8 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     }
   }, [mediaKind, selectedFile]);
 
-  const setMediaFile = useCallback((file: File | null) => {
+  const setMediaFiles = useCallback((files: File[]) => {
+    const file = files[0] ?? null;
     analysisAbortRef.current?.abort();
     analysisAbortRef.current = null;
     if (previewUrlRef.current) {
@@ -399,6 +403,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     const nextUrl = file ? URL.createObjectURL(file) : null;
     previewUrlRef.current = nextUrl;
     setPreviewUrl(nextUrl);
+    setSelectedFiles([...files]);
     setSelectedFile(file);
 
     const nextKind = file?.type.startsWith("image/")
@@ -422,6 +427,11 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     setScheduledAt(null);
     setReportComplete(false);
   }, [setAnalysisStarted]);
+
+  const setMediaFile = useCallback(
+    (file: File | null) => setMediaFiles(file ? [file] : []),
+    [setMediaFiles],
+  );
 
   useEffect(() => {
     return () => {
@@ -493,9 +503,11 @@ export function DemoProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<DemoContextValue>(
     () => ({
+      selectedFiles,
       selectedFile,
       previewUrl,
       mediaKind,
+      setMediaFiles,
       setMediaFile,
       candidates,
       selectedCandidateId,
@@ -523,9 +535,11 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       setRiskConsent,
     }),
     [
+      selectedFiles,
       selectedFile,
       previewUrl,
       mediaKind,
+      setMediaFiles,
       setMediaFile,
       candidates,
       selectedCandidateId,

@@ -55,9 +55,6 @@ export function ResultsScreen() {
   return (
     <div className="page-container space-y-6 pt-6 pb-12 sm:pt-10">
       <div className="space-y-2">
-        <Link href="/upload" className="inline-flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-[#0f6b65]">
-          <span aria-hidden="true">←</span> 자료 선택으로
-        </Link>
         <p className="eyebrow">장면 선택 · 3/4</p>
         <h1 className="page-heading">위반 의심 장면</h1>
         <p className="page-subtitle">{hasStructuredImageResult && !isDemoImageResult ? "업로드한 사진의 AI 참고 분석을 확인해 주세요." : "AI 참고 분석 예시에서 검토할 장면을 하나 선택해 주세요."}</p>
