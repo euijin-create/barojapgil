@@ -27,8 +27,8 @@ export const violationLabels: Record<ViolationType, string> = {
 export const MOCK_CANDIDATES: Candidate[] = [
   {
     id: "signal-01",
-    start: "00:42",
-    end: "00:49",
+    start: "00:12:48",
+    end: "00:13:03",
     type: "signal",
     confidence: 91,
     plate: "12가 34**",
@@ -51,8 +51,8 @@ export const MOCK_CANDIDATES: Candidate[] = [
   },
   {
     id: "center-02",
-    start: "03:15",
-    end: "03:22",
+    start: "00:25:10",
+    end: "00:25:18",
     type: "center",
     confidence: 84,
     plate: "34나 56**",
@@ -75,8 +75,8 @@ export const MOCK_CANDIDATES: Candidate[] = [
   },
   {
     id: "cutin-03",
-    start: "07:31",
-    end: "07:39",
+    start: "00:41:22",
+    end: "00:41:29",
     type: "cutin",
     confidence: 76,
     plate: "56다 78**",
@@ -120,8 +120,7 @@ export const PHOTO_CANDIDATE: Candidate = {
 export type ReportStatus =
   | "analyzing"
   | "ready"
-  | "delayed"
-  | "available"
+  | "submissionPending"
   | "completed";
 
 export interface MockReport {
@@ -152,18 +151,10 @@ export const MOCK_REPORTS: MockReport[] = [
   },
   {
     id: "sample-03",
-    title: "도로 주행 사진",
-    subtitle: "설정한 버튼 활성 시각을 기다리는 중 · 체험용 내역",
-    status: "delayed",
-    date: "09.17",
-    type: "center",
-  },
-  {
-    id: "sample-04",
     title: "합류 구간 영상",
-    subtitle: "안전신문고 이동 버튼이 활성화된 예시 · 체험용 내역",
-    status: "available",
-    date: "09.16",
+    subtitle: "안전신문고 최종 제출을 기다리고 있어요 · 체험용 내역",
+    status: "submissionPending",
+    date: "09.17",
     type: "cutin",
   },
   {
@@ -191,41 +182,41 @@ export interface RiskArea {
 export const RISK_AREAS: RiskArea[] = [
   {
     id: "area-01",
-    name: "북부 교차로 일대",
-    region: "서울 · 예시 구역 A",
+    name: "마포구 월드컵로 일대",
+    region: "서울 마포구 · 집계 구역 A",
     type: "signal",
-    count: 28,
+    count: 12,
     level: "높음",
     x: 30,
     y: 26,
   },
   {
     id: "area-02",
-    name: "중앙로 굽은 구간",
-    region: "서울 · 예시 구역 B",
-    type: "center",
-    count: 16,
+    name: "성수대교 북단 일대",
+    region: "서울 성동구 · 집계 구역 B",
+    type: "cutin",
+    count: 8,
     level: "보통",
     x: 63,
     y: 42,
   },
   {
     id: "area-03",
-    name: "남부 합류 구간",
-    region: "경기 · 예시 구역 C",
-    type: "cutin",
-    count: 22,
-    level: "높음",
+    name: "시민로 사거리 일대",
+    region: "서울 영등포구 · 집계 구역 C",
+    type: "center",
+    count: 5,
+    level: "낮음",
     x: 44,
     y: 72,
   },
   {
     id: "area-04",
-    name: "동측 교차로 일대",
-    region: "경기 · 예시 구역 D",
+    name: "양화로 교차로 일대",
+    region: "서울 마포구 · 집계 구역 D",
     type: "signal",
-    count: 20,
-    level: "낮음",
+    count: 7,
+    level: "보통",
     x: 78,
     y: 77,
   },

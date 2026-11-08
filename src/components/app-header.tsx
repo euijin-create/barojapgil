@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { StatusBadge } from "@/components/ui/status-badge";
 
 type NavigationIconName = "home" | "new" | "reports" | "map" | "points";
 
@@ -12,6 +11,7 @@ const navigation = [
   { href: "/upload", label: "새 신고", icon: "new" as const },
   { href: "/reports", label: "내 신고", icon: "reports" as const },
   { href: "/risk-map", label: "교통위험지도", icon: "map" as const },
+  { href: "/safety-points", label: "안전 포인트", icon: "points" as const },
 ];
 
 const reportFlowPaths = new Set([
@@ -20,7 +20,7 @@ const reportFlowPaths = new Set([
   "/results",
   "/diagnosis",
   "/package",
-  "/delay",
+  "/submission-ready",
 ]);
 
 const backHrefByPath: Record<string, string> = {
@@ -29,7 +29,7 @@ const backHrefByPath: Record<string, string> = {
   "/results": "/upload",
   "/diagnosis": "/results",
   "/package": "/diagnosis",
-  "/delay": "/package",
+  "/submission-ready": "/package",
 };
 
 function NavigationIcon({ name }: { name: NavigationIconName }) {
@@ -216,22 +216,6 @@ export function AppHeader() {
                     </li>
                   );
                 })}
-                <li className="app-header__menu-disabled-row">
-                  <button
-                    type="button"
-                    disabled
-                    title="준비 중인 기능입니다"
-                    className="app-header__menu-disabled"
-                  >
-                    <span className="app-header__menu-icon">
-                      <NavigationIcon name="points" />
-                    </span>
-                    <span>안전 포인트</span>
-                    <StatusBadge tone="orange" className="app-header__menu-badge">
-                      준비 중
-                    </StatusBadge>
-                  </button>
-                </li>
               </ul>
             </nav>
           ) : null}

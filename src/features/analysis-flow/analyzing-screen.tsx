@@ -2,17 +2,106 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  InfoCard,
+  PrimaryButton,
+  SectionLabel,
+  StatusBadge,
+} from "@/components/ui";
 import { useDemo } from "@/features/demo/demo-context";
 
 const ANALYSIS_STEPS = [
-  { title: "위반 의심 장면을 찾고 있습니다", detail: "전체 자료에서 살펴볼 구간을 정리합니다." },
-  { title: "차량 및 주변 상황을 분석하고 있습니다", detail: "차량 움직임과 주변 장면을 함께 살펴봅니다." },
-  { title: "신고 증거를 확인하고 있습니다", detail: "확인된 내용과 추가 확인이 필요한 내용을 나눕니다." },
-];
+  "영상/이미지 품질 확인",
+  "차량번호 인식",
+  "위반 상황 분석",
+  "시간·장소 정보 확인",
+  "신고 증거 확인",
+] as const;
 
 const MINIMUM_PROGRESS_MS = 3_200;
 const MOCK_RESULT_DELAY_MS = 4_400;
 const PROGRESS_VALUES = [20, 48, 76, 100] as const;
+
+type StepState = "complete" | "current" | "pending";
+
+function AiAnalysisIcon({ isPaused = false }: { isPaused?: boolean }) {
+  return (
+    <div
+      className="relative mx-auto grid h-28 w-28 place-items-center"
+      aria-hidden="true"
+    >
+      {!isPaused ? (
+        <span className="absolute inset-1 animate-ping rounded-full bg-[#dceeff] opacity-40" />
+      ) : null}
+      <span className="absolute inset-0 rounded-full border border-[#c7e0fa] bg-[#f4f9ff]" />
+      <span className="absolute inset-3 rounded-full border border-dashed border-[#8ab8ec]" />
+      <span className="relative grid h-17 w-17 place-items-center rounded-[18px] bg-[var(--primary)] text-white shadow-[0_6px_18px_rgba(47,128,237,0.16)]">
+        <svg
+          viewBox="0 0 48 48"
+          fill="none"
+          className="h-10 w-10"
+          stroke="currentColor"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="10" y="12" width="28" height="26" rx="8" />
+          <path d="M24 7v5M17 21h.01M31 21h.01" />
+          <path d="M17 29c2 2 4.3 3 7 3s5-1 7-3" />
+          <path d="M10 24H6M42 24h-4" />
+        </svg>
+      </span>
+      <span className="absolute right-0 top-2 grid h-8 w-8 place-items-center rounded-full border-4 border-white bg-[var(--mint)] text-white">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className="h-4 w-4"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M12 2 10.7 7.2A5 5 0 0 1 7.2 10.7L2 12l5.2 1.3a5 5 0 0 1 3.5 3.5L12 22l1.3-5.2a5 5 0 0 1 3.5-3.5L22 12l-5.2-1.3a5 5 0 0 1-3.5-3.5L12 2Z" />
+        </svg>
+      </span>
+    </div>
+  );
+}
+
+function NoticeIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-5 w-5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10v6M12 7h.01" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      className="h-4 w-4"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m4 10 4 4 8-8" />
+    </svg>
+  );
+}
 
 export function AnalyzingScreen() {
   const router = useRouter();
@@ -22,10 +111,13 @@ export function AnalyzingScreen() {
     analysisStartedAt,
     analysisStatus,
     analysisError,
+    analysisProvider,
+    analysisIsDemo,
     analyzeSelectedImage,
     cancelAnalysis,
   } = useDemo();
   const [step, setStep] = useState(0);
+  const [visualStage, setVisualStage] = useState(0);
   const [minimumElapsed, setMinimumElapsed] = useState(false);
   const isImageRequest = mediaKind === "image" && selectedFile !== null;
 
@@ -37,6 +129,11 @@ export function AnalyzingScreen() {
     const schedule = (targetMs: number, callback: () => void) => {
       timers.push(window.setTimeout(callback, Math.max(0, targetMs - elapsed)));
     };
+
+    schedule(650, () => setVisualStage((current) => Math.max(current, 1)));
+    schedule(1_300, () => setVisualStage((current) => Math.max(current, 2)));
+    schedule(2_100, () => setVisualStage((current) => Math.max(current, 3)));
+    schedule(2_750, () => setVisualStage((current) => Math.max(current, 4)));
 
     schedule(900, () => setStep((current) => Math.max(current, 1)));
     schedule(1_900, () => setStep((current) => Math.max(current, 2)));
@@ -56,9 +153,20 @@ export function AnalyzingScreen() {
     return () => window.clearTimeout(timer);
   }, [analysisStatus, isImageRequest, minimumElapsed, router]);
 
-  const displayedStep = isImageRequest && minimumElapsed && analysisStatus === "success" ? 3 : step;
+  const displayedStep =
+    isImageRequest && minimumElapsed && analysisStatus === "success" ? 3 : step;
   const progress = PROGRESS_VALUES[displayedStep];
   const hasError = isImageRequest && analysisStatus === "error";
+  const isAnalysisComplete = displayedStep >= 3;
+  const showDemoNotice =
+    !isImageRequest || analysisIsDemo === true || analysisProvider === "mock";
+
+  function getStepState(index: number): StepState {
+    if (isAnalysisComplete) return "complete";
+    if (index < visualStage) return "complete";
+    if (index === visualStage) return "current";
+    return "pending";
+  }
 
   function returnToUpload() {
     cancelAnalysis();
@@ -67,106 +175,191 @@ export function AnalyzingScreen() {
 
   function retryAnalysis() {
     setStep(0);
+    setVisualStage(0);
     setMinimumElapsed(false);
     void analyzeSelectedImage();
   }
 
   return (
-    <div className="page-container space-y-6 pt-6 pb-12 sm:pt-10">
-      <div className="space-y-2">
-        <p className="eyebrow">AI 참고 분석 · 2/4</p>
-        <h1 className="page-heading">{hasError ? "사진을 분석하지 못했어요" : "자료를 살펴보고 있어요"}</h1>
-        <p className="page-subtitle">
-          {isImageRequest
-            ? "업로드한 사진에서 확인할 내용을 정리하고 있습니다."
-            : selectedFile
-              ? "영상의 검토 흐름을 모의 데이터로 체험하고 있습니다."
-              : "샘플 영상으로 검토 흐름을 체험하고 있습니다."}
+    <div className="page-container flex min-h-[calc(100svh-124px)] flex-col pb-2 pt-5">
+      <header className="text-center">
+        <AiAnalysisIcon isPaused={hasError} />
+        <SectionLabel className="mt-6 justify-center">AI ANALYZING</SectionLabel>
+        <h1 className="mt-3 whitespace-pre-line text-[28px] font-extrabold leading-[1.3] tracking-[-0.045em] text-[var(--navy)]">
+          {"신고에 필요한 정보를\n확인하고 있어요."}
+        </h1>
+        <p className="mt-3 text-sm font-medium text-[var(--ink-muted)]">
+          잠시만 기다려주세요.
         </p>
-      </div>
-
-      <div className="flex gap-1.5" aria-label="진행 단계: 분석 진행 2단계">
-        <span className="h-1.5 flex-1 rounded-full bg-[#0f766e]" />
-        <span className="h-1.5 flex-1 rounded-full bg-[#0f766e]" />
-        <span className="h-1.5 flex-1 rounded-full bg-slate-200" />
-        <span className="h-1.5 flex-1 rounded-full bg-slate-200" />
-      </div>
+      </header>
 
       {hasError ? (
-        <section className="surface-card p-6 text-center sm:p-8" aria-live="polite">
-          <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-2xl font-bold text-red-700" aria-hidden="true">!</span>
-          <h2 className="mt-5 text-lg font-bold text-slate-900">다시 시도할 수 있습니다</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
-            {analysisError?.message ?? "사진을 분석하지 못했습니다. 잠시 후 다시 시도해 주세요."}
+        <section
+          className="mt-7 rounded-2xl border border-red-200 bg-red-50 p-5 text-center"
+          aria-live="polite"
+        >
+          <span
+            className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-white text-xl font-extrabold text-red-700"
+            aria-hidden="true"
+          >
+            !
+          </span>
+          <h2 className="mt-4 text-base font-extrabold text-[var(--navy)]">
+            분석을 완료하지 못했어요.
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-[#6d8091]">
+            {analysisError?.message ??
+              "사진을 분석하지 못했습니다. 잠시 후 다시 시도해 주세요."}
           </p>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <button type="button" onClick={retryAnalysis} className="button-primary flex-1">다시 분석하기</button>
-            <button type="button" onClick={returnToUpload} className="button-secondary flex-1">다른 사진 선택</button>
+          <div className="mt-5 space-y-3">
+            <PrimaryButton type="button" fullWidth onClick={retryAnalysis}>
+              다시 분석하기
+            </PrimaryButton>
+            <PrimaryButton
+              type="button"
+              tone="neutral"
+              fullWidth
+              onClick={returnToUpload}
+            >
+              다른 사진 선택
+            </PrimaryButton>
           </div>
         </section>
       ) : (
-        <section className="surface-card overflow-hidden p-6 sm:p-8" aria-label="분석 진행 상태">
-          <div className="relative mx-auto flex h-32 w-32 items-center justify-center">
-            <div className="absolute inset-0 animate-pulse rounded-full bg-[#e1f1ed]" />
-            <div className="absolute inset-3 animate-spin rounded-full border-4 border-[#cae6de] border-t-[#0f766e]" />
-            <div className="relative flex h-17 w-17 items-center justify-center rounded-full bg-white text-[#0f766e] shadow-sm">
-              <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11Z" />
-                <path d="m10 9 5 3-5 3V9Z" />
-              </svg>
-            </div>
+        <section className="mt-8" aria-labelledby="analysis-progress-title">
+          <div className="flex items-center justify-between gap-3">
+            <h2
+              id="analysis-progress-title"
+              className="text-sm font-extrabold text-[var(--navy)]"
+            >
+              분석 진행 상황
+            </h2>
+            <span className="text-sm font-extrabold tabular-nums text-[var(--primary)]">
+              {progress}%
+            </span>
           </div>
-          <p className="mt-5 text-center text-lg font-bold text-slate-900" role="status" aria-live="polite">
-            {displayedStep >= ANALYSIS_STEPS.length ? "분석 결과를 준비했습니다" : ANALYSIS_STEPS[displayedStep].title}
-          </p>
-          <p className="mt-1 text-center text-sm text-slate-500">
-            {isImageRequest && minimumElapsed && analysisStatus === "loading"
-              ? "사진 분석이 진행 중입니다. 잠시만 기다려 주세요."
-              : "잠시 후 후보 장면을 확인할 수 있습니다."}
-          </p>
-          <div className="mt-7 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label="분석 진행률" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
-            <div className="h-full rounded-full bg-[#0f766e] transition-all duration-700" style={{ width: `${progress}%` }} />
+          <div
+            className="mt-3 h-2 overflow-hidden rounded-full bg-[#e8eff6]"
+            role="progressbar"
+            aria-label="AI 참고 분석 진행률"
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className="h-full rounded-full bg-[var(--primary)] transition-[width] duration-700"
+              style={{ width: `${progress}%` }}
+            />
           </div>
-          <p className="mt-2 text-right text-xs font-semibold text-[#0f766e]">{progress}%</p>
         </section>
       )}
 
       {!hasError ? (
-        <section className="surface-card p-5 sm:p-6" aria-label="분석 단계">
-          <h2 className="section-heading">분석 단계</h2>
-          <ol className="mt-5 space-y-5">
-            {ANALYSIS_STEPS.map((item, index) => (
-              <li key={item.title} className="flex items-start gap-3">
-                <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${index < displayedStep ? "bg-[#0f766e] text-white" : index === displayedStep ? "bg-[#dff2eb] text-[#0f766e]" : "bg-slate-100 text-slate-400"}`} aria-hidden="true">
-                  {index < displayedStep ? "✓" : index + 1}
-                </span>
-                <div>
-                  <p className={`text-sm font-semibold ${index > displayedStep ? "text-slate-400" : "text-slate-900"}`}>{item.title}</p>
-                  <p className="mt-0.5 text-xs leading-5 text-slate-500">{item.detail}</p>
-                </div>
-              </li>
-            ))}
+        <section
+          className="mt-6 rounded-2xl border border-[var(--line)] bg-white px-5 py-2"
+          aria-label="AI 분석 단계"
+        >
+          <ol>
+            {ANALYSIS_STEPS.map((label, index) => {
+              const state = getStepState(index);
+              const isLast = index === ANALYSIS_STEPS.length - 1;
+              return (
+                <li
+                  key={label}
+                  className="relative flex min-h-[70px] items-center gap-4 py-3"
+                  aria-current={state === "current" ? "step" : undefined}
+                >
+                  {!isLast ? (
+                    <span
+                      className={`absolute left-[17px] top-[47px] h-[38px] w-px ${state === "complete" ? "bg-[#94dcc8]" : "bg-[#dde7ef]"}`}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                  <span
+                    className={`relative z-10 grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-extrabold transition-colors ${
+                      state === "complete"
+                        ? "bg-[var(--mint-soft)] text-[var(--mint-dark)]"
+                        : state === "current"
+                          ? "bg-[var(--primary)] text-white ring-4 ring-[#dceeff]"
+                          : "border border-[#d8e3ec] bg-[#f4f7fa] text-[#9aabb9]"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {state === "complete" ? <CheckIcon /> : index + 1}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={`block text-sm font-bold ${
+                        state === "pending"
+                          ? "text-[#91a2b1]"
+                          : "text-[var(--navy)]"
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  </span>
+                  <StatusBadge
+                    tone={
+                      state === "complete"
+                        ? "mint"
+                        : state === "current"
+                          ? "blue"
+                          : "neutral"
+                    }
+                    showDot={state === "current"}
+                  >
+                    {state === "complete"
+                      ? "완료"
+                      : state === "current"
+                        ? "진행 중"
+                        : "대기"}
+                  </StatusBadge>
+                </li>
+              );
+            })}
           </ol>
         </section>
       ) : null}
 
-      {!isImageRequest ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-          <p className="font-bold">체험용 분석 화면</p>
-          <p className="mt-1">영상과 샘플은 실제 AI가 판독하지 않습니다. 이어지는 내용은 체험용 예시 데이터입니다.</p>
-        </div>
+      {showDemoNotice ? (
+        <InfoCard
+          tone="orange"
+          icon={<NoticeIcon />}
+          title="데모 분석 안내"
+          className="mt-5"
+        >
+          현재 데모 분석 결과이며 실제 업로드 파일을 AI가 판독한 결과가 아닙니다.
+        </InfoCard>
       ) : (
-        <p className="rounded-2xl bg-slate-100 px-4 py-3 text-xs leading-5 text-slate-600">
-          AI 참고 분석은 부정확할 수 있습니다. 분석 결과의 차량번호, 시각, 장소와 예상 위반 유형을 직접 확인해 주세요.
-        </p>
+        <InfoCard
+          tone="blue"
+          icon={<NoticeIcon />}
+          title="AI 참고 분석"
+          className="mt-5"
+        >
+          AI 분석은 부정확할 수 있습니다. 결과의 차량번호, 시각, 장소와 예상 위반 유형을 직접 확인해주세요.
+        </InfoCard>
       )}
 
       {!hasError ? (
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="mt-auto space-y-3 pt-7">
           {!isImageRequest ? (
-            <button type="button" onClick={() => router.replace("/results")} className="button-primary flex-1">예시 결과 바로 보기</button>
+            <PrimaryButton
+              type="button"
+              fullWidth
+              onClick={() => router.replace("/results")}
+            >
+              예시 결과 바로 보기
+            </PrimaryButton>
           ) : null}
-          <button type="button" onClick={returnToUpload} className="button-secondary flex-1">자료 선택으로 돌아가기</button>
+          <PrimaryButton
+            type="button"
+            tone="neutral"
+            fullWidth
+            onClick={returnToUpload}
+          >
+            자료 선택으로 돌아가기
+          </PrimaryButton>
         </div>
       ) : null}
     </div>

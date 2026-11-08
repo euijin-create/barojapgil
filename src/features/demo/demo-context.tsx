@@ -28,10 +28,10 @@ export interface ReportDraft {
   occurredAt: string;
   location: string;
   violationType: ViolationType;
+  violationReviewMode: "supported" | "other" | "uncertain";
+  violationTypeDetail: string;
   statement: string;
 }
-
-export type DelayHours = 0 | 6 | 12 | 24;
 
 export type AnalysisRequestStatus = "idle" | "loading" | "success" | "error";
 
@@ -64,9 +64,8 @@ interface DemoContextValue {
   draft: ReportDraft;
   updateDraft: (patch: Partial<ReportDraft>) => void;
   regenerateStatement: () => void;
-  delayHours: DelayHours | null;
-  scheduledAt: number | null;
-  scheduleDelay: (hours: DelayHours) => void;
+  submissionReady: boolean;
+  markSubmissionReady: () => void;
   reportComplete: boolean;
   markReportComplete: () => void;
   riskConsent: boolean;
@@ -253,6 +252,8 @@ function createDraft(candidate: Candidate, isDemo = true): ReportDraft {
     occurredAt: candidate.occurredAt,
     location: candidate.location,
     violationType: candidate.type,
+    violationReviewMode: candidate.type === "unknown" ? "uncertain" : "supported",
+    violationTypeDetail: "",
     statement: createStatement(candidate, undefined, isDemo),
   };
 }
@@ -276,8 +277,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   const analysisAbortRef = useRef<AbortController | null>(null);
   const [draft, setDraft] = useState<ReportDraft>(() => createDraft(MOCK_CANDIDATES[0]));
   const statementEditedRef = useRef(false);
-  const [delayHours, setDelayHours] = useState<DelayHours | null>(null);
-  const [scheduledAt, setScheduledAt] = useState<number | null>(null);
+  const [submissionReady, setSubmissionReady] = useState(false);
   const [reportComplete, setReportComplete] = useState(false);
   const [riskConsent, setRiskConsent] = useState(false);
 
@@ -423,8 +423,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     setImageAnalysisResult(null);
     setAnalysisProvider(null);
     setAnalysisIsDemo(null);
-    setDelayHours(null);
-    setScheduledAt(null);
+    setSubmissionReady(false);
     setReportComplete(false);
   }, [setAnalysisStarted]);
 
@@ -447,8 +446,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       setSelectedCandidateId(id);
       setDraft(createDraft(candidate, analysisIsDemo ?? true));
       statementEditedRef.current = false;
-      setDelayHours(null);
-      setScheduledAt(null);
+      setSubmissionReady(false);
       setReportComplete(false);
     },
     [analysisIsDemo, candidates],
@@ -491,9 +489,8 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     }));
   }, [analysisIsDemo, selectedCandidate]);
 
-  const scheduleDelay = useCallback((hours: DelayHours) => {
-    setDelayHours(hours);
-    setScheduledAt(Date.now() + hours * 60 * 60 * 1000);
+  const markSubmissionReady = useCallback(() => {
+    setSubmissionReady(true);
     setReportComplete(false);
   }, []);
 
@@ -526,9 +523,8 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       draft,
       updateDraft,
       regenerateStatement,
-      delayHours,
-      scheduledAt,
-      scheduleDelay,
+      submissionReady,
+      markSubmissionReady,
       reportComplete,
       markReportComplete,
       riskConsent,
@@ -558,9 +554,8 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       draft,
       updateDraft,
       regenerateStatement,
-      delayHours,
-      scheduledAt,
-      scheduleDelay,
+      submissionReady,
+      markSubmissionReady,
       reportComplete,
       markReportComplete,
       riskConsent,

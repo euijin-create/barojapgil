@@ -120,14 +120,12 @@ src/
     violation-review/
     evidence/
     report-package/
-    delayed-report/
     risk-map/
 
   domain/
     report-case/
     violation/
     evidence/
-    delayed-report/
     risk-map/
 
   application/
@@ -163,7 +161,7 @@ supabase/
 - `src/app`: 라우팅, 메타데이터, 서버 데이터 조합, loading/error boundary
 - `src/components/ui`: Button, Field, Card, Dialog처럼 도메인을 모르는 재사용 UI
 - `src/features`: 한 기능에 필요한 작은 Client Component, 폼, hook, 표시 컴포넌트
-- `src/domain`: 순수 TypeScript 타입, 불변식, 상태 전이, 증거 및 지연 정책
+- `src/domain`: 순수 TypeScript 타입, 불변식, 상태 전이, 증거 정책
 - `src/application`: 사용 사례와 외부 의존성 포트, 화면에 필요한 최소 DTO
 - `src/contracts`: AI 결과, webhook, 공개 응답의 버전형 런타임 스키마
 - `src/infrastructure`: mock, Supabase, AI 제공자별 포트 구현
@@ -177,13 +175,13 @@ supabase/
 | 경로 | 책임 | 주 렌더링 |
 | --- | --- | --- |
 | `/` | 서비스 설명, AI 한계, 시작 CTA | Server |
-| `/cases` | 사용자의 초안과 분석·지연 상태 목록 | Server |
+| `/cases` | 사용자의 초안과 분석·신고 준비 상태 목록 | Server |
 | `/cases/new` | 파일 선택, 검증, 업로드 시작 | Server shell + Client uploader |
 | `/cases/[caseId]` | 저장된 상태를 읽고 올바른 다음 단계로 재개 | Server |
 | `/cases/[caseId]/analyzing` | 업로드·분석 진행, 후보 없음, 실패·재시도 | Server shell + polling/realtime Client |
 | `/cases/[caseId]/candidates` | 영상 플레이어, 후보 타임라인, 핵심 구간 선택 | Server shell + Client interaction |
 | `/cases/[caseId]/review` | 핵심정보 수정, 예상 유형, 근거, 신뢰도, 증거 체크 | Server + 작은 Client form |
-| `/cases/[caseId]/package` | 최종 패키지, 문장 수정, 지연 상태, 외부 신고 버튼 | Server + Client countdown |
+| `/cases/[caseId]/package` | 최종 패키지, 문장 수정, 신고 준비 완료, 사용자가 누르는 외부 신고 버튼 | Server + Client form |
 | `/risk-map` | 집계 지도와 필터, 개인정보 안내 | Server shell + Client map |
 | `/privacy` | 처리 목적, 보존·삭제·동의 정책 | Server |
 
@@ -214,10 +212,7 @@ Server Component의 데이터 조회는 `/api`를 거치지 않고 DAL과 reposi
 | `MediaStorage` | 비공개 업로드, 단기 읽기 권한, 파생 미디어, 삭제 |
 | `AnalysisGateway` | 분석 작업 제출, 상태 조회, 결과 정규화 |
 | `ReportPackageGenerator` | 확정 revision 기준 패키지 snapshot 생성 |
-| `ReportDeadlinePolicy` | 사건 시각과 검증된 정책으로 마감 시각 계산 |
-| `NotificationScheduler` | 지연 시점 알림 예약·취소; 신고 동작은 포함하지 않음 |
 | `RiskAggregationRepository` | 동의된 기여값 반영과 공개 집계 조회 |
-| `Clock` | 서버 기준 시각 주입과 지연 로직 테스트 |
 
 예상 use case:
 
@@ -226,7 +221,6 @@ Server Component의 데이터 조회는 `/api`를 거치지 않고 DAL과 reposi
 - `selectCandidate`, `adjustEvidenceRange`
 - `confirmFacts`, `changeViolationType`, `assessEvidence`
 - `generateReportDraft`, `generatePackage`
-- `scheduleDelayedReport`, `cancelDelayedReport`, `getReportAvailability`
 - `recordRiskMapConsent`, `publishRiskContribution`
 - `deleteCase`
 
@@ -294,13 +288,10 @@ type AnalysisStatus =
   | "succeeded"
   | "failed";
 
-type DelayedReportStatus =
-  | "not_scheduled"
-  | "waiting"
-  | "available"
-  | "completed_by_user"
-  | "expired"
-  | "cancelled";
+type SubmissionStatus =
+  | "preparing"
+  | "awaiting_manual_submission"
+  | "completed_by_user";
 ```
 
 중요 불변식:
@@ -308,8 +299,7 @@ type DelayedReportStatus =
 - 분석 성공 전에는 후보를 선택할 수 없다.
 - 신고 패키지당 선택 후보는 하나다.
 - 사용자 확인을 거치지 않은 핵심정보로 최종 패키지를 만들 수 없다.
-- `availableAt <= now < deadlineAt`일 때만 외부 신고 버튼을 활성화한다.
-- 버튼 활성 여부는 서버 기준 시각으로 다시 검증한다.
+- 외부 신고 버튼은 신고 준비 완료 상태에서만 제공한다.
 - `completed_by_user`는 사용자가 직접 완료 사실을 표시할 때만 설정한다.
 - 어떤 상태 전이도 안전신문고 제출을 실행하지 않는다.
 
@@ -320,7 +310,7 @@ type DelayedReportStatus =
 | 테이블 | 주요 필드와 역할 |
 | --- | --- |
 | `profiles` | `id = auth.users.id`, 최소 사용자 설정, 생성·수정 시각 |
-| `report_cases` | `id`, `owner_id`, case stage, `selected_candidate_id`, 보존·삭제 시각 |
+| `report_cases` | `id`, `owner_id`, case stage, submission status, `selected_candidate_id`, 보존·삭제 시각 |
 | `media_assets` | `case_id`, 종류(original/clip/frame/plate_crop/package), private object path, MIME, bytes, duration, checksum, 검역·업로드 상태, `purge_at` |
 | `analysis_jobs` | case/asset, status/progress, provider job ID, idempotency key, model/prompt/contract version, 안전한 오류 코드, 시각 |
 | `violation_candidates` | job, 순서, `start_ms/end_ms`, 예상 유형, 탐지·분류 신뢰도, 참고 근거, private preview asset ID |
@@ -329,7 +319,6 @@ type DelayedReportStatus =
 | `evidence_assessments` | draft revision, 유형, 전체 참고 상태, `rule_version`, 생성 시각 |
 | `evidence_items` | assessment, 항목 코드, 상태, 설명, 근거 시작·종료 오프셋 |
 | `report_packages` | 확정 draft revision snapshot, 핵심 미디어 asset, private manifest 경로, 생성 시각 |
-| `delayed_report_schedules` | `available_at`, `deadline_at`, status, 알림 채널·시각, 정책 버전 |
 | `consents` | 동의 유형, 정책 버전, 부여·철회 시각 |
 | `risk_contributions` | 제한된 내부 계층. 동의 ID, 거친 공간·시간 bucket, 확인 유형, 철회용 source token |
 | `risk_aggregates` | 공개 가능한 cell, 기간 bucket, 유형, count/위험 지표, 산식 버전 |
@@ -461,20 +450,11 @@ AI가 관찰 사실을 추출하고, 버전형 규칙이 위반 유형별 체크
 
 규칙에는 `ruleVersion`, 근거 출처, 검수일을 둔다. 사용자가 위반 유형을 바꾸면 같은 관찰값에 새 유형 규칙을 적용한다. 법령이나 공식 신고 기준 변경 시 기존 결과를 조용히 바꾸지 않고 재평가 여부를 명시한다.
 
-## 13. 안전 지연 신고 설계
+## 13. 안전신문고 수동 이동 설계
 
-`availableAt`과 `deadlineAt`은 다른 개념이다.
+신고 준비 완료 화면은 준비된 자료를 요약하고 자동 전송이나 자동 제출이 일어나지 않는다는 점을 알린다. 외부 신고 버튼은 allowlist로 검증된 안전신문고 공식 URL만 열며, 사용자가 버튼을 직접 누른 뒤 안전신문고에서 첨부·제출한다.
 
-- `availableAt`: 사용자가 요청한 버튼 활성 시각
-- `deadlineAt`: 검증된 신고 기간 정책이 계산한 참고 마감 시각
-
-서버는 `now < availableAt < deadlineAt` 조건으로 예약을 검증한다. 클라이언트 카운트다운은 표시용이며, 페이지 재진입과 외부 이동 직전에 서버 기준 시각과 상태를 다시 확인한다.
-
-상태를 갱신하기 위해 필수적으로 cron을 돌릴 필요는 없다. 조회 시 서버가 현재 시각으로 `waiting/available/expired`를 계산할 수 있다. 향후 알림이 필요할 때만 `NotificationScheduler`와 별도 예약 worker를 연결한다. 이 worker는 알림과 상태 갱신만 하며 신고 자료 전송 권한을 갖지 않는다.
-
-신고 가능 기간은 변경되거나 상황별 예외가 있을 수 있으므로 숫자를 코드에 고정하지 않는다. 정책은 출처, 관할, 버전, 검수일, 적용 시작일을 갖고 출시 전 법률·운영 검토를 거친다.
-
-외부 신고 버튼은 allowlist로 검증된 안전신문고 공식 URL만 열며 사용자가 직접 첨부·제출한다. 서비스는 안전신문고 계정 정보나 비밀번호를 저장하지 않는다.
+외부 사이트로 이동한 사실만으로 신고 완료 상태를 만들지 않는다. 신고 완료는 사용자가 직접 완료 사실을 표시할 때만 기록하며, 서비스는 안전신문고 계정 정보나 비밀번호를 저장하지 않는다.
 
 ## 14. 교통위험지도 개인정보 설계
 
@@ -518,11 +498,11 @@ AI가 관찰 사실을 추출하고, 버전형 규칙이 위반 유형별 체크
 
 | 계층 | 주요 검증 |
 | --- | --- |
-| 단위 | 상태 전이, 시간대·deadline 경계, 증거 규칙, DTO redaction, 문장 생성의 누락값 처리 |
+| 단위 | 상태 전이, 증거 규칙, DTO redaction, 문장 생성의 누락값 처리 |
 | 계약 | mock과 실제 adapter가 같은 포트·`AnalysisResultV1`을 만족하는지 |
-| 컴포넌트 | 후보 선택, 필드 출처 표시, 접근성, 지연 카운트다운 |
+| 컴포넌트 | 후보 선택, 필드 출처 표시, 접근성, 신고 준비 완료 안내 |
 | 통합 | RLS 소유권, private Storage, signed URL 만료, webhook 멱등성과 replay 방지 |
-| E2E | 업로드→분석→후보→수정→패키지→지연→외부 이동 전 확인 |
+| E2E | 업로드→분석→후보→수정→패키지→신고 준비 완료→외부 이동 전 확인 |
 
 E2E에서는 안전신문고를 가짜 목적지로 대체하고 실제 외부 제출을 절대 수행하지 않는다. Next.js 로컬 가이드가 async Server Component에는 E2E 테스트를 권장하므로 서버 렌더링 흐름은 E2E 비중을 높인다.
 
@@ -546,9 +526,8 @@ E2E에서는 안전신문고를 가짜 목적지로 대체하고 실제 외부 �
 - mock과 실제 AI 결과의 계약 테스트
 - 모델·규칙 평가와 품질 모니터링
 
-### 단계 4: 지연 알림과 위험지도
+### 단계 4: 교통위험지도
 
-- 검증된 신고 기간 정책과 선택한 알림 채널 연결
 - 동의·가명처리·집계·철회 파이프라인 검증
 - 최소 표본 기준을 충족한 집계만 공개
 
@@ -560,8 +539,6 @@ E2E에서는 안전신문고를 가짜 목적지로 대체하고 실제 외부 �
 - 영상 처리 worker와 queue 운영 방식
 - AI 제공자, 처리 지역, 보존·학습 사용 정책
 - 위치 추출·지도 검색 제공자와 API 키 노출 정책
-- 공식 신고 가능 기간 산정 규칙과 검수 책임자
-- 지연 기본값, 알림 채널, 다른 기기 동기화 범위
 - 안전신문고 공식 URL 및 앱 딥링크 정책
 - 지도 격자·시간 단위, 최소 표본 수, 위험 지표 산식
 - 동의 철회 시 기존 집계 재계산 방식

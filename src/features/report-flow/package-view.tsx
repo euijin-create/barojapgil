@@ -1,43 +1,80 @@
 "use client";
 
-import { useState } from "react";
+import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { PrimaryButton } from "@/components/ui";
 import { useDemo } from "@/features/demo/demo-context";
-import { violationLabels, type ViolationType } from "@/lib/demo-data";
-import MediaPreview from "./media-preview";
+import type { ViolationType } from "@/lib/demo-data";
 
-const violationTypes: ViolationType[] = ["signal", "center", "cutin", "unknown"];
+type SupportedViolationType = Exclude<ViolationType, "unknown">;
+type ViolationSelection = SupportedViolationType | "other" | "uncertain";
 
-function PackageField({
+const violationOptions: Array<{
+  value: ViolationSelection;
+  label: string;
+}> = [
+  { value: "signal", label: "신호위반 의심" },
+  { value: "center", label: "중앙선 침범 의심" },
+  { value: "cutin", label: "위험 끼어들기 의심" },
+  { value: "other", label: "기타 · 직접 입력" },
+  { value: "uncertain", label: "판단하기 어려움" },
+];
+
+const assertiveStatementPatterns = [
+  /위반(?:이|으로)?\s*(?:확정|확인되었습니다|확인됨)/,
+  /위반(?:했(?:습니다|다)?|하였(?:습니다|다)?|한\s*(?:사실|차량)|입니다|으로\s*판단)/,
+  /침범(?:했(?:습니다|다)?|하였(?:습니다|다)?|한\s*(?:사실|차량))/,
+  /끼어들(?:었습니다|었다|었음)/,
+  /(?:명백한|분명한)\s*(?:법규\s*)?위반/,
+  /(?:불법|위법)\s*(?:차량|입니다)/,
+  /위반\s*차량입니다/,
+];
+
+function isSupportedViolationType(
+  value: ViolationSelection,
+): value is SupportedViolationType {
+  return value === "signal" || value === "center" || value === "cutin";
+}
+
+function containsAssertiveLanguage(value: string) {
+  return assertiveStatementPatterns.some((pattern) => pattern.test(value));
+}
+
+function EditableField({
   id,
   label,
   value,
   suggested,
+  placeholder,
   onChange,
 }: {
   id: string;
   label: string;
   value: string;
   suggested: string;
+  placeholder: string;
   onChange: (value: string) => void;
 }) {
+  const sourceId = `${id}-source`;
+
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <label htmlFor={id} className="text-sm font-bold text-slate-800">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <label htmlFor={id} className="text-sm font-extrabold text-[var(--navy)]">
           {label}
         </label>
-        <span className="text-xs text-slate-500">
+        <span id={sourceId} className="text-[11px] font-semibold text-[#7690a8]">
           {value === suggested ? "AI 제안 · 수정 가능" : "사용자 수정값"}
         </span>
       </div>
       <input
         id={id}
         type="text"
-        className="form-input w-full"
         value={value}
-        placeholder={`${label} 확인 필요`}
+        placeholder={placeholder}
+        aria-describedby={sourceId}
+        className="form-input w-full"
         onChange={(event) => onChange(event.target.value)}
       />
     </div>
@@ -47,246 +84,255 @@ function PackageField({
 export default function PackageView() {
   const router = useRouter();
   const {
-    selectedFile,
     selectedCandidate,
     draft,
     updateDraft,
     regenerateStatement,
-    mediaKind,
-    previewUrl,
     analysisIsDemo,
+    markSubmissionReady,
   } = useDemo();
-  const [confirmed, setConfirmed] = useState(false);
-  const [copyMessage, setCopyMessage] = useState("");
-  const range = selectedCandidate.end
-    ? `${selectedCandidate.start}~${selectedCandidate.end}`
-    : selectedCandidate.start;
-  const filled = Boolean(
-    draft.plate.trim() &&
-      draft.occurredAt.trim() &&
-      draft.location.trim() &&
-      draft.statement.trim(),
-  );
-  const missing = [
+
+  const violationSelection: ViolationSelection =
+    draft.violationReviewMode === "other"
+      ? "other"
+      : draft.violationReviewMode === "uncertain" ||
+          draft.violationType === "unknown"
+        ? "uncertain"
+        : draft.violationType;
+  const typeMatchesSuggestion =
+    (draft.violationReviewMode === "supported" &&
+      draft.violationType === selectedCandidate.type) ||
+    (draft.violationReviewMode === "uncertain" &&
+      selectedCandidate.type === "unknown");
+  const statementNeedsSoftening = containsAssertiveLanguage(draft.statement);
+  const missingFields = [
     !draft.plate.trim() && "차량번호",
     !draft.occurredAt.trim() && "발생 시각",
     !draft.location.trim() && "장소",
-    !draft.statement.trim() && "신고 문장",
-  ].filter(Boolean);
+    !draft.statement.trim() && "신고 내용",
+    draft.violationReviewMode === "other" &&
+      !draft.violationTypeDetail.trim() &&
+      "기타 위반 유형",
+  ].filter((item): item is string => Boolean(item));
+  const canContinue = missingFields.length === 0 && !statementNeedsSoftening;
 
-  function changeField(patch: Parameters<typeof updateDraft>[0]) {
-    updateDraft(patch);
-    setConfirmed(false);
-    setCopyMessage("");
-  }
-
-  async function copyStatement() {
-    if (!draft.statement.trim()) return;
-    try {
-      await navigator.clipboard.writeText(draft.statement);
-      setCopyMessage("신고 문장을 복사했습니다. 안전신문고에서 내용을 다시 확인해 주세요.");
-    } catch {
-      setCopyMessage("복사할 수 없습니다. 문장을 직접 선택해 복사해 주세요.");
+  function changeViolation(nextSelection: ViolationSelection) {
+    if (isSupportedViolationType(nextSelection)) {
+      updateDraft({
+        violationType: nextSelection,
+        violationReviewMode: "supported",
+        violationTypeDetail: "",
+      });
+      return;
     }
+
+    if (nextSelection === "other") {
+      updateDraft({
+        violationType: "unknown",
+        violationReviewMode: "other",
+      });
+      return;
+    }
+
+    updateDraft({
+      violationType: "unknown",
+      violationReviewMode: "uncertain",
+      violationTypeDetail: "",
+    });
   }
 
   function confirmRegenerateStatement() {
-    if (
-      window.confirm(
-        "현재 입력한 차량번호, 시각, 장소, 예상 위반 유형으로 신고 문장 초안을 다시 만드시겠어요? 지금 수정한 문장은 덮어써집니다.",
-      )
-    ) {
+    const message = draft.statement.trim()
+      ? "현재 수정한 신고 내용은 안전한 AI 참고 초안으로 교체됩니다. 다시 작성할까요?"
+      : "현재 확인한 정보로 AI 참고 초안을 만들까요?";
+
+    if (window.confirm(message)) {
       regenerateStatement();
-      setConfirmed(false);
-      setCopyMessage("");
     }
   }
 
+  function submitPackage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canContinue) return;
+    markSubmissionReady();
+    router.push("/submission-ready");
+  }
+
   return (
-    <div className="page-container space-y-6 pt-6 pb-28 sm:pt-10">
-      <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-        <span className="rounded-full bg-teal-700 px-3 py-1 text-white">04</span>
-        <span>증거 진단</span>
-        <span aria-hidden="true">/</span>
-        <span className="text-teal-700">신고 패키지</span>
-        <span aria-hidden="true">/</span>
-        <span>안전 지연</span>
-      </div>
-
-      <div>
-        <p className="eyebrow">최종 확인 단계</p>
-        <h1 className="page-heading">신고 자료를 검토해 주세요</h1>
-        <p className="page-subtitle">
-          핵심 장면과 신고 문장을 한곳에 모았습니다. 실제 자료와 대조해 틀린 부분을 수정해 주세요.
+    <div className="page-container space-y-6 pb-10 pt-4">
+      <section className="overflow-hidden rounded-2xl border border-[#d5e9ff] bg-[#edf6ff] px-6 py-7 sm:px-8 sm:py-9">
+        <p className="text-xs font-extrabold tracking-[0.08em] text-[var(--primary)]">
+          ✦ AI AUTO-FILL
         </p>
-      </div>
+        <h1 className="mt-4 whitespace-pre-line text-[30px] font-extrabold leading-[1.25] tracking-[-0.055em] text-[var(--navy)] sm:text-[34px]">
+          {"신고서를\n자동으로 작성했어요."}
+        </h1>
+        <p className="mt-3 text-[15px] font-semibold text-[#66839e]">
+          제출 전 내용을 확인해주세요.
+        </p>
+        <p className="mt-5 rounded-xl border border-[#cfe4f8] bg-white/65 px-4 py-3 text-xs leading-5 text-[#54718b]">
+          {analysisIsDemo === false
+            ? "AI 참고 분석과 사용자가 확인한 내용을 바탕으로 만든 초안이에요. 위법 여부를 확정하지 않으며 모든 항목을 직접 수정할 수 있어요."
+            : "체험용 분석과 사용자가 확인한 내용을 바탕으로 만든 예시 초안이에요. 실제 자료와 대조해 직접 수정해주세요."}
+        </p>
+      </section>
 
-      <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm leading-6 text-teal-900">
-        AI 분석은 참고 정보이며 부정확할 수 있습니다. 최종 판단, 내용 확인 및 신고는 사용자가 직접 수행해야 합니다.
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)]">
-        <section className="surface-card space-y-4 p-5 sm:p-6">
-          <div className="flex items-center justify-between gap-3">
+      <form className="space-y-6" onSubmit={submitPackage} noValidate>
+        <section className="surface-card space-y-6 p-5 sm:p-7" aria-labelledby="report-form-title">
+          <div className="flex items-start justify-between gap-3 border-b border-[#e4edf5] pb-4">
             <div>
-              <p className="eyebrow">신고 자료 01</p>
-              <h2 className="section-heading">핵심 장면</h2>
+              <p className="text-xs font-extrabold tracking-[0.07em] text-[var(--primary)]">
+                수정 가능한 신고서
+              </p>
+              <h2 id="report-form-title" className="mt-1 text-xl font-extrabold text-[var(--navy)]">
+                신고 내용 확인
+              </h2>
             </div>
-            <span className="badge">{range}</span>
-          </div>
-          <MediaPreview mediaKind={mediaKind} previewUrl={previewUrl} range={range} />
-          <div className="rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-            <p className="font-bold text-slate-900">
-              {selectedFile ? selectedFile.name : "체험용 모의 자료"}
-            </p>
-            <p className="mt-1">
-              {selectedFile && analysisIsDemo === false
-                ? "업로드한 사진의 브라우저 미리보기입니다. AI 참고 분석 결과와 모든 신고 정보를 원본과 직접 대조해 주세요."
-                : selectedFile
-                  ? "선택한 원본의 브라우저 미리보기입니다. 분석 내용은 실제 판독값이 아닌 모의 결과이며 자동 첨부는 제공되지 않습니다."
-                : "실제 파일이 선택되지 않았습니다. 이 장면은 화면 흐름 체험용 예시입니다."}
-            </p>
-          </div>
-          <Link href="/diagnosis" className="button-secondary inline-flex w-full items-center justify-center">
-            증거 진단 다시 보기
-          </Link>
-        </section>
-
-        <section className="surface-card space-y-5 p-5 sm:p-6">
-          <div>
-            <p className="eyebrow">신고 자료 02</p>
-            <h2 className="section-heading">핵심정보 수정</h2>
-            <p className="mt-2 text-sm text-slate-600">AI가 제안한 값과 사용자 수정값을 구분해 보여줍니다.</p>
+            <span className="shrink-0 rounded-full bg-[#e8f3ff] px-3 py-1.5 text-[11px] font-extrabold text-[var(--primary)]">
+              직접 수정 가능
+            </span>
           </div>
 
-          <PackageField
-            id="package-plate"
-            label="차량번호"
-            value={draft.plate}
-            suggested={selectedCandidate.plate}
-            onChange={(plate) => changeField({ plate })}
-          />
-          <PackageField
-            id="package-time"
-            label="발생 시각"
-            value={draft.occurredAt}
-            suggested={selectedCandidate.occurredAt}
-            onChange={(occurredAt) => changeField({ occurredAt })}
-          />
-          <PackageField
-            id="package-location"
-            label="장소"
-            value={draft.location}
-            suggested={selectedCandidate.location}
-            onChange={(location) => changeField({ location })}
-          />
-          <div>
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <label htmlFor="package-type" className="text-sm font-bold text-slate-800">
-                예상 위반 유형
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="package-type" className="text-sm font-extrabold text-[var(--navy)]">
+                위반 유형
               </label>
-              <span className="text-xs text-slate-500">
-                {draft.violationType === selectedCandidate.type ? "AI 제안 · 수정 가능" : "사용자 수정값"}
+              <span id="package-type-source" className="text-[11px] font-semibold text-[#7690a8]">
+                {typeMatchesSuggestion ? "AI 제안 · 수정 가능" : "사용자 수정값"}
               </span>
             </div>
             <select
               id="package-type"
+              value={violationSelection}
+              aria-describedby="package-type-source"
               className="form-input w-full"
-              value={draft.violationType}
               onChange={(event) =>
-                changeField({ violationType: event.target.value as ViolationType })
+                changeViolation(event.target.value as ViolationSelection)
               }
             >
-              {violationTypes.map((type) => (
-                <option key={type} value={type}>
-                  {violationLabels[type]}
+              {violationOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
-            {draft.violationType !== selectedCandidate.type && (
-              <p className="mt-2 text-xs leading-5 text-amber-800">
-                유형을 바꾸면 이전 AI 증거 진단이 현재 유형에 그대로 적용되지 않습니다.
+            {draft.violationReviewMode === "other" ? (
+              <div className="pt-2">
+                <label htmlFor="package-type-detail" className="mb-2 block text-xs font-bold text-[#607b94]">
+                  기타 위반 유형 또는 상황
+                </label>
+                <input
+                  id="package-type-detail"
+                  type="text"
+                  value={draft.violationTypeDetail}
+                  maxLength={80}
+                  placeholder="관찰한 상황을 확정적 표현 없이 입력해주세요."
+                  className="form-input w-full"
+                  onChange={(event) =>
+                    updateDraft({ violationTypeDetail: event.target.value })
+                  }
+                />
+                <p className="mt-2 text-xs leading-5 text-[var(--ink-muted)]">
+                  지원 유형 밖의 사용자 입력이며 AI 판단 결과로 표시되지 않아요.
+                </p>
+              </div>
+            ) : null}
+            {draft.violationReviewMode === "uncertain" ? (
+              <p className="text-xs leading-5 text-[var(--ink-muted)]">
+                유형을 판단하기 어려운 상태로 신고서를 준비해요. 최종 판단은 관계기관이 수행합니다.
               </p>
-            )}
+            ) : null}
+          </div>
+
+          <EditableField
+            id="package-plate"
+            label="차량번호"
+            value={draft.plate}
+            suggested={selectedCandidate.plate}
+            placeholder="차량번호를 확인해주세요."
+            onChange={(plate) => updateDraft({ plate })}
+          />
+          <EditableField
+            id="package-time"
+            label="발생 시각"
+            value={draft.occurredAt}
+            suggested={selectedCandidate.occurredAt}
+            placeholder="발생 날짜와 시각을 입력해주세요."
+            onChange={(occurredAt) => updateDraft({ occurredAt })}
+          />
+          <EditableField
+            id="package-location"
+            label="장소"
+            value={draft.location}
+            suggested={selectedCandidate.location}
+            placeholder="발생 장소를 입력해주세요."
+            onChange={(location) => updateDraft({ location })}
+          />
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="package-statement" className="text-sm font-extrabold text-[var(--navy)]">
+                신고 내용
+              </label>
+              <span className="text-[11px] font-semibold text-[#7690a8]">
+                AI 참고 초안 · 수정 가능
+              </span>
+            </div>
+            <textarea
+              id="package-statement"
+              value={draft.statement}
+              rows={8}
+              placeholder="예: 영상에서 위반이 의심되는 장면으로 보여 확인을 요청드립니다."
+              aria-describedby="package-statement-help"
+              className="form-input w-full resize-y leading-7"
+              onChange={(event) => updateDraft({ statement: event.target.value })}
+            />
+            <div id="package-statement-help" className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--ink-muted)]">
+              <span>{draft.statement.length}자 · 확정되지 않은 사실은 적지 마세요.</span>
+              <button
+                type="button"
+                className="font-extrabold text-[var(--primary)] underline decoration-[#a9ccee] underline-offset-4"
+                onClick={confirmRegenerateStatement}
+              >
+                AI 참고 초안 다시 만들기
+              </button>
+            </div>
+            {statementNeedsSoftening ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950" role="alert">
+                위법 여부를 확정하는 것처럼 들리는 표현이 있어요. “위반이 의심되는 장면으로 보여 확인을 요청드립니다”처럼 고치거나 AI 참고 초안을 다시 만들어주세요.
+              </div>
+            ) : null}
           </div>
         </section>
-      </div>
 
-      <section className="surface-card space-y-4 p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="eyebrow">신고 자료 03</p>
-            <h2 className="section-heading">자동 작성 신고 문장</h2>
-          </div>
-          <span className="badge">AI 초안 · 수정 가능</span>
-        </div>
-        <p className="text-sm leading-6 text-slate-600">
-          {analysisIsDemo === false
-            ? "아래 문장은 AI 참고 분석과 현재 입력값을 바탕으로 만든 초안입니다. 원본에서 확인되지 않은 사실이 없는지 직접 점검해 주세요."
-            : "아래 문장은 선택한 장면의 모의 제안을 바탕으로 만든 예시입니다. 수정 내용이 문장에 반영됐는지 확인하고, 필요하면 현재 입력값으로 다시 만들어 주세요."}
-        </p>
-        <label htmlFor="package-statement" className="sr-only">신고 문장</label>
-        <textarea
-          id="package-statement"
-          className="form-input min-h-44 w-full resize-y leading-7"
-          value={draft.statement}
-          placeholder="관찰한 사실을 중심으로 신고 문장을 직접 작성해 주세요."
-          onChange={(event) => changeField({ statement: event.target.value })}
-        />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">{draft.statement.length}자 · 확인되지 않은 사실은 적지 마세요.</p>
-          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-            <button
-              type="button"
-              className="button-secondary w-full sm:w-auto"
-              onClick={confirmRegenerateStatement}
-            >
-              현재 입력값으로 문장 초안 다시 만들기
-            </button>
-            <button
-              type="button"
-              className="button-secondary w-full sm:w-auto"
-              onClick={copyStatement}
-              disabled={!draft.statement.trim()}
-            >
-              문장 복사하기
-            </button>
-          </div>
-        </div>
-        {copyMessage && <p className="text-sm text-teal-800" role="status">{copyMessage}</p>}
-      </section>
-
-      <section className="surface-card space-y-4 p-5 sm:p-6">
-        <div>
-          <p className="eyebrow">마지막 확인</p>
-          <h2 className="section-heading">직접 확인하셨나요?</h2>
-        </div>
-        {missing.length > 0 && (
-          <p className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900">
-            확인이 필요한 항목: {missing.join(", ")}. 빈 칸을 채워야 다음 단계로 이동할 수 있습니다.
+        {missingFields.length > 0 ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950" role="status">
+            확인이 필요한 항목: {missingFields.join(", ")}
           </p>
-        )}
-        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 text-sm leading-6 text-slate-700">
-          <input
-            type="checkbox"
-            className="mt-1 h-5 w-5 shrink-0 accent-teal-700"
-            checked={confirmed}
-            onChange={(event) => setConfirmed(event.target.checked)}
-          />
-          <span>핵심 장면, 차량번호, 시각, 장소, 예상 유형, 신고 문장을 직접 검토했습니다. 최종 판단과 신고는 제가 직접 합니다.</span>
-        </label>
-        <button
-          type="button"
-          className="button-primary w-full disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!filled || !confirmed}
-          onClick={() => router.push("/delay")}
-        >
-          확인 완료 · 안전 지연 설정하기
-        </button>
-        <p className="text-center text-xs leading-5 text-slate-500">
-          이 단계는 자료를 정리할 뿐 안전신문고에 자동 제출하지 않습니다.
-        </p>
-      </section>
+        ) : null}
+
+        <div className="space-y-3">
+          <PrimaryButton
+            type="submit"
+            fullWidth
+            disabled={!canContinue}
+            trailingIcon={<span aria-hidden="true">→</span>}
+          >
+            신고 준비 완료하기
+          </PrimaryButton>
+          <p className="text-center text-xs leading-5 text-[var(--ink-muted)]">
+            신고 준비 화면에서도 안전신문고에 자동으로 신고하거나 자료를
+            전송하지 않아요.
+          </p>
+          <Link
+            href="/diagnosis?step=review"
+            className="block min-h-11 rounded-xl px-4 py-3 text-center text-sm font-extrabold text-[#607b94] underline decoration-[#c7d6e3] underline-offset-4"
+          >
+            사용자 검토로 돌아가기
+          </Link>
+        </div>
+      </form>
     </div>
   );
 }
