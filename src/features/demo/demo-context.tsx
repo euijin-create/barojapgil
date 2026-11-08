@@ -76,6 +76,11 @@ const VIOLATION_TYPE_MAP: Record<ViolationTypeCode, ViolationType> = {
   SIGNAL_VIOLATION: "signal",
   CENTER_LINE_VIOLATION: "center",
   DANGEROUS_MERGE: "cutin",
+  STOP_LINE_OR_CROSSWALK: "stopLineCrosswalk",
+  ILLEGAL_U_TURN: "illegalUTurn",
+  INTERSECTION_VIOLATION: "intersection",
+  ILLEGAL_PARKING: "illegalParking",
+  OTHER_TRAFFIC_VIOLATION: "other",
   UNKNOWN: "unknown",
 };
 
@@ -100,9 +105,7 @@ function toCandidate(result: ImageAnalysisResult): Candidate {
     id: result.analysisId,
     start: "단일 사진",
     end: "",
-    type: result.suspectedViolation
-      ? VIOLATION_TYPE_MAP[result.violationType]
-      : "unknown",
+    type: VIOLATION_TYPE_MAP[result.violationType],
     confidence: Math.round(Math.max(0, Math.min(1, result.confidence)) * 100),
     plate: result.plateNumberCandidate?.trim() || "확인 필요",
     occurredAt: result.occurredAtCandidate?.trim() || "",
@@ -229,7 +232,7 @@ function createStatement(
   const observedScene =
     type === "unknown"
       ? "위반 유형과 주변 상황을 원본 자료에서 확인해 주시기 바랍니다."
-      : violationLabels[type] + "이 의심되는 장면으로 보이는 부분을 확인해 주시기 바랍니다.";
+      : `${violationLabels[type]} 의심 장면으로 보이는 부분을 확인해 주시기 바랍니다.`;
   return (
     (isDemo
       ? "※ 체험용 문장 예시입니다. 실제 자료와 대조해 수정해 주세요.\n"
@@ -252,7 +255,12 @@ function createDraft(candidate: Candidate, isDemo = true): ReportDraft {
     occurredAt: candidate.occurredAt,
     location: candidate.location,
     violationType: candidate.type,
-    violationReviewMode: candidate.type === "unknown" ? "uncertain" : "supported",
+    violationReviewMode:
+      candidate.type === "unknown"
+        ? "uncertain"
+        : candidate.type === "other"
+          ? "other"
+          : "supported",
     violationTypeDetail: "",
     statement: createStatement(candidate, undefined, isDemo),
   };

@@ -10,21 +10,13 @@ import {
   StatusBadge,
 } from "@/components/ui";
 import { useDemo } from "@/features/demo/demo-context";
-import { violationLabels, type ViolationType } from "@/lib/demo-data";
+import {
+  violationLabels,
+  violationTypeOptions,
+  type ViolationType,
+} from "@/lib/demo-data";
 
-type SupportedViolationType = Exclude<ViolationType, "unknown">;
-type ReviewChoice = SupportedViolationType | "other" | "uncertain";
-
-const reviewOptions: {
-  value: ReviewChoice;
-  label: string;
-}[] = [
-  { value: "signal", label: "신호위반" },
-  { value: "center", label: "중앙선 침범" },
-  { value: "cutin", label: "위험 끼어들기" },
-  { value: "other", label: "기타 교통위반" },
-  { value: "uncertain", label: "판단 어려움" },
-];
+type ReviewChoice = ViolationType;
 
 function displayViolationType(type: ViolationType) {
   return type === "unknown" ? "판단 어려움" : `${violationLabels[type]} 의심`;
@@ -35,8 +27,7 @@ export default function HumanReviewView() {
   const { selectedCandidate, draft, updateDraft } = useDemo();
   const [selectedType, setSelectedType] = useState<ReviewChoice | null>(null);
   const [otherType, setOtherType] = useState(draft.violationTypeDetail);
-  const otherTypeIsMissing =
-    selectedType === "other" && otherType.trim().length === 0;
+  const otherTypeIsMissing = selectedType === "other" && otherType.trim().length === 0;
   const canContinue = selectedType !== null && !otherTypeIsMissing;
 
   function continueWithReviewedType() {
@@ -44,11 +35,11 @@ export default function HumanReviewView() {
 
     if (selectedType === "other") {
       updateDraft({
-        violationType: "unknown",
+        violationType: "other",
         violationReviewMode: "other",
         violationTypeDetail: otherType.trim(),
       });
-    } else if (selectedType === "uncertain") {
+    } else if (selectedType === "unknown") {
       updateDraft({
         violationType: "unknown",
         violationReviewMode: "uncertain",
@@ -105,16 +96,9 @@ export default function HumanReviewView() {
       <fieldset>
         <legend className="section-heading">위반 유형 선택</legend>
         <div className="mt-4 space-y-2.5">
-          {reviewOptions.map((option) => {
+          {violationTypeOptions.map((option) => {
             const selected = selectedType === option.value;
-            const isSupportedChoice =
-              option.value === "signal" ||
-              option.value === "center" ||
-              option.value === "cutin";
-            const isAiSuggestion = isSupportedChoice
-              ? selectedCandidate.type === option.value
-              : option.value === "uncertain" &&
-                selectedCandidate.type === "unknown";
+            const isAiSuggestion = selectedCandidate.type === option.value;
 
             return (
               <label

@@ -1,4 +1,13 @@
-export type ViolationType = "signal" | "center" | "cutin" | "unknown";
+export type ViolationType =
+  | "signal"
+  | "center"
+  | "cutin"
+  | "stopLineCrosswalk"
+  | "illegalUTurn"
+  | "intersection"
+  | "illegalParking"
+  | "other"
+  | "unknown";
 
 export interface Candidate {
   id: string;
@@ -21,8 +30,28 @@ export const violationLabels: Record<ViolationType, string> = {
   signal: "신호위반",
   center: "중앙선 침범",
   cutin: "위험 끼어들기",
-  unknown: "판단 불가",
+  stopLineCrosswalk: "정지선·횡단보도 침범",
+  illegalUTurn: "불법 유턴",
+  intersection: "교차로 통행방법 위반",
+  illegalParking: "불법 주정차",
+  other: "기타 교통위반",
+  unknown: "판단 어려움",
 };
+
+export const violationTypeOptions: ReadonlyArray<{
+  value: ViolationType;
+  label: string;
+}> = [
+  { value: "signal", label: violationLabels.signal },
+  { value: "center", label: violationLabels.center },
+  { value: "cutin", label: violationLabels.cutin },
+  { value: "stopLineCrosswalk", label: violationLabels.stopLineCrosswalk },
+  { value: "illegalUTurn", label: violationLabels.illegalUTurn },
+  { value: "intersection", label: violationLabels.intersection },
+  { value: "illegalParking", label: violationLabels.illegalParking },
+  { value: "other", label: violationLabels.other },
+  { value: "unknown", label: violationLabels.unknown },
+];
 
 export const MOCK_CANDIDATES: Candidate[] = [
   {
@@ -171,7 +200,7 @@ export interface RiskArea {
   id: string;
   name: string;
   region: string;
-  type: Exclude<ViolationType, "unknown">;
+  type: Extract<ViolationType, "signal" | "center" | "cutin">;
   count: number;
   level: "높음" | "보통" | "낮음";
   x: number;

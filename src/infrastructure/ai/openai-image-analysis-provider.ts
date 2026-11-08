@@ -16,31 +16,17 @@ import {
   parseImageAnalysisResult,
   type ImageAnalysisResult,
 } from "@/contracts/analysis-v1";
+import {
+  getAnalysisSystemInstructions,
+  getAnalysisUserInstructions,
+} from "@/infrastructure/ai/analysis-instructions";
 
 export const DEFAULT_OPENAI_MODEL = "gpt-6-astra";
 
-export const IMAGE_ANALYSIS_SYSTEM_INSTRUCTIONS = `
-당신은 교통법규 위반 신고 자료를 정리하도록 돕는 참고 분석 보조 시스템입니다. 법률 전문가나 판정 기관이 아닙니다.
-
-반드시 다음 원칙을 따르세요.
-- 교통법규 위반을 확정적으로 판정하지 마세요.
-- "의심", "예상", "참고 분석"과 같은 표현을 사용하세요.
-- 이미지에 보이지 않는 사실을 추측하거나 새로 만들지 마세요.
-- 차량번호가 명확하지 않으면 임의로 만들지 말고 plateNumberCandidate를 null로 반환하세요.
-- 시간이나 장소를 이미지에서 확인할 수 없으면 해당 필드를 null로 반환하고 확인 불가를 명시하세요.
-- 증거가 부족하거나 불명확하면 evidenceItems, missingEvidence, warnings에 그 사실을 명확히 표시하세요.
-- 최종 위법 판단은 관계기관이 수행함을 warnings에 포함하세요.
-- 사용자가 차량번호, 시각, 장소 등 모든 추출 정보를 최종 확인해야 함을 warnings에 포함하세요.
-- confidence는 0과 1 사이의 보수적인 값으로 제시하세요.
-- reasoningSummary에는 숨은 추론 과정이 아니라 이미지에서 관찰된 근거와 불확실성만 간결하게 작성하세요.
-- 지원 유형에 해당하지 않거나 근거가 부족하면 violationType을 UNKNOWN으로 반환하세요.
-`.trim();
-
-const IMAGE_ANALYSIS_USER_INSTRUCTIONS = `
-제공된 교통 이미지 한 장을 분석하세요.
-지원하는 예상 유형은 신호위반, 중앙선 침범, 위험 끼어들기와 판단 불가뿐입니다.
-법적 결론 대신 관찰 사실, 불확실성, 부족한 증거를 구조화된 결과로 작성하세요.
-`.trim();
+export const IMAGE_ANALYSIS_SYSTEM_INSTRUCTIONS =
+  getAnalysisSystemInstructions("IMAGE");
+export const VIDEO_ANALYSIS_SYSTEM_INSTRUCTIONS =
+  getAnalysisSystemInstructions("VIDEO");
 
 export interface OpenAIImageAnalysisProviderOptions {
   apiKey: string | undefined;
@@ -76,14 +62,14 @@ export class OpenAIImageAnalysisProvider implements ImageAnalysisProvider {
         model: this.model,
         reasoning: { effort: "medium" },
         store: false,
-        instructions: IMAGE_ANALYSIS_SYSTEM_INSTRUCTIONS,
+        instructions: getAnalysisSystemInstructions(input.mediaType),
         input: [
           {
             role: "user",
             content: [
               {
                 type: "input_text",
-                text: `${IMAGE_ANALYSIS_USER_INSTRUCTIONS}\nanalysisId에는 반드시 "${analysisId}"를 사용하세요.`,
+                text: `${getAnalysisUserInstructions(input.mediaType)}\nanalysisId에는 반드시 "${analysisId}"를 사용하고 mediaType에는 "${input.mediaType}"을 사용하세요.`,
               },
               {
                 type: "input_image",
@@ -116,6 +102,7 @@ export class OpenAIImageAnalysisProvider implements ImageAnalysisProvider {
       return parseImageAnalysisResult({
         ...response.output_parsed,
         analysisId,
+        mediaType: input.mediaType,
       });
     } catch (error) {
       if (error instanceof AnalysisUnavailableError) {

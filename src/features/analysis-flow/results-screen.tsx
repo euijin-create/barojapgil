@@ -9,14 +9,8 @@ import {
   StatusBadge,
 } from "@/components/ui";
 import { useDemo } from "@/features/demo/demo-context";
+import { violationLabels } from "@/lib/demo-data";
 import { MediaPreview } from "./media-preview";
-
-const TYPE_LABELS = {
-  signal: "신호위반",
-  center: "중앙선 침범",
-  cutin: "위험 끼어들기",
-  unknown: "판단 어려움",
-} as const;
 
 const MOCK_ANALYSIS_NOTICE =
   "현재 데모 분석 결과이며 실제 업로드 파일을 AI가 판독한 결과가 아닙니다.";
@@ -80,6 +74,8 @@ export function ResultsScreen() {
 
   const isPhoto = mediaKind === "image";
   const isDemoImageResult = isPhoto && analysisIsDemo !== false;
+  const needsTemporalEvidence =
+    isPhoto && imageAnalysisResult?.needsTemporalEvidence === true;
   const visibleWarnings =
     imageAnalysisResult?.warnings.filter(
       (warning) => !(analysisIsDemo && warning === MOCK_ANALYSIS_NOTICE),
@@ -118,6 +114,14 @@ export function ResultsScreen() {
         </InfoCard>
       )}
 
+      {needsTemporalEvidence ? (
+        <InfoCard tone="orange" title="추가 영상 확인이 필요해요" role="note">
+          사진만으로 차량의 이동 과정을 확인할 수 없어 영상 확인이
+          필요합니다. 현재 보이는 정지 위치·차선·신호 상태는 AI 참고
+          정보로만 확인해주세요.
+        </InfoCard>
+      ) : null}
+
       <section className="surface-card overflow-hidden p-4" aria-labelledby="preview-title">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 id="preview-title" className="section-heading">
@@ -144,7 +148,7 @@ export function ResultsScreen() {
               <div className="min-w-0">
                 <p className="text-xs font-bold text-[var(--primary)]">현재 선택 · AI 참고 분석</p>
                 <p className="mt-1 text-base font-extrabold text-[var(--navy)]">
-                  {TYPE_LABELS[selectedCandidate.type]}
+                  {violationLabels[selectedCandidate.type]}
                   {selectedCandidate.type === "unknown" ? "" : " 의심"}
                 </p>
               </div>
@@ -242,7 +246,7 @@ export function ResultsScreen() {
                             : `장면 ${String(index + 1).padStart(2, "0")} · ${candidate.start} ~ ${candidate.end}`}
                         </p>
                         <p className="mt-1.5 text-[16px] font-extrabold text-[var(--navy)]">
-                          {TYPE_LABELS[candidate.type]}
+                          {violationLabels[candidate.type]}
                           {candidate.type === "unknown" ? "" : " 의심"}
                         </p>
                       </div>

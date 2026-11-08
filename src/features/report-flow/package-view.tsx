@@ -5,21 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PrimaryButton } from "@/components/ui";
 import { useDemo } from "@/features/demo/demo-context";
-import type { ViolationType } from "@/lib/demo-data";
+import {
+  violationTypeOptions,
+  type ViolationType,
+} from "@/lib/demo-data";
 
-type SupportedViolationType = Exclude<ViolationType, "unknown">;
-type ViolationSelection = SupportedViolationType | "other" | "uncertain";
-
-const violationOptions: Array<{
-  value: ViolationSelection;
-  label: string;
-}> = [
-  { value: "signal", label: "신호위반 의심" },
-  { value: "center", label: "중앙선 침범 의심" },
-  { value: "cutin", label: "위험 끼어들기 의심" },
-  { value: "other", label: "기타 · 직접 입력" },
-  { value: "uncertain", label: "판단하기 어려움" },
-];
+type ViolationSelection = ViolationType;
 
 const assertiveStatementPatterns = [
   /위반(?:이|으로)?\s*(?:확정|확인되었습니다|확인됨)/,
@@ -30,12 +21,6 @@ const assertiveStatementPatterns = [
   /(?:불법|위법)\s*(?:차량|입니다)/,
   /위반\s*차량입니다/,
 ];
-
-function isSupportedViolationType(
-  value: ViolationSelection,
-): value is SupportedViolationType {
-  return value === "signal" || value === "center" || value === "cutin";
-}
 
 function containsAssertiveLanguage(value: string) {
   return assertiveStatementPatterns.some((pattern) => pattern.test(value));
@@ -97,11 +82,13 @@ export default function PackageView() {
       ? "other"
       : draft.violationReviewMode === "uncertain" ||
           draft.violationType === "unknown"
-        ? "uncertain"
+        ? "unknown"
         : draft.violationType;
   const typeMatchesSuggestion =
     (draft.violationReviewMode === "supported" &&
       draft.violationType === selectedCandidate.type) ||
+    (draft.violationReviewMode === "other" &&
+      selectedCandidate.type === "other") ||
     (draft.violationReviewMode === "uncertain" &&
       selectedCandidate.type === "unknown");
   const statementNeedsSoftening = containsAssertiveLanguage(draft.statement);
@@ -117,26 +104,26 @@ export default function PackageView() {
   const canContinue = missingFields.length === 0 && !statementNeedsSoftening;
 
   function changeViolation(nextSelection: ViolationSelection) {
-    if (isSupportedViolationType(nextSelection)) {
-      updateDraft({
-        violationType: nextSelection,
-        violationReviewMode: "supported",
-        violationTypeDetail: "",
-      });
-      return;
-    }
-
     if (nextSelection === "other") {
       updateDraft({
-        violationType: "unknown",
+        violationType: "other",
         violationReviewMode: "other",
       });
       return;
     }
 
+    if (nextSelection === "unknown") {
+      updateDraft({
+        violationType: "unknown",
+        violationReviewMode: "uncertain",
+        violationTypeDetail: "",
+      });
+      return;
+    }
+
     updateDraft({
-      violationType: "unknown",
-      violationReviewMode: "uncertain",
+      violationType: nextSelection,
+      violationReviewMode: "supported",
       violationTypeDetail: "",
     });
   }
@@ -211,7 +198,7 @@ export default function PackageView() {
                 changeViolation(event.target.value as ViolationSelection)
               }
             >
-              {violationOptions.map((option) => (
+              {violationTypeOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -234,7 +221,7 @@ export default function PackageView() {
                   }
                 />
                 <p className="mt-2 text-xs leading-5 text-[var(--ink-muted)]">
-                  지원 유형 밖의 사용자 입력이며 AI 판단 결과로 표시되지 않아요.
+                  기타 교통위반의 구체적인 상황은 사용자 확인 내용으로 저장돼요.
                 </p>
               </div>
             ) : null}

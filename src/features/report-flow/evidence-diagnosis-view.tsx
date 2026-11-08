@@ -23,15 +23,124 @@ interface DiagnosisItem {
   status: DiagnosisStatus;
 }
 
-const TYPE_GUIDANCE: Record<ViolationType, string> = {
-  signal:
-    "적용 신호 상태, 정지선·교차로 진입 장면, 대상 차량의 식별 연속성과 전후 맥락을 원본에서 확인해 주세요.",
-  center:
-    "중앙선의 종류와 위치, 선을 넘는 이동 장면, 대상 차량의 식별 연속성과 도로 상황을 원본에서 확인해 주세요.",
-  cutin:
-    "차선과 이동 경로, 전후 차량 간격, 급격한 진입 정황과 전후 맥락을 원본에서 확인해 주세요.",
-  unknown:
-    "예상 유형을 판단하기 어려운 상태입니다. 장면의 전후 맥락과 차량 움직임을 원본에서 다시 확인해 주세요.",
+interface TypeEvidenceGuide {
+  guidance: string;
+  checklist: readonly string[];
+}
+
+const TYPE_EVIDENCE_GUIDES: Record<ViolationType, TypeEvidenceGuide> = {
+  signal: {
+    guidance:
+      "적용 신호와 차량이 정지선 또는 교차로에 진입한 시점이 같은 흐름에서 확인되는지 살펴보세요.",
+    checklist: [
+      "차량 식별",
+      "신호 상태",
+      "차량 진입 시점",
+      "정지선·교차로 위치",
+      "위반 전후 상황",
+      "촬영 시각",
+      "발생 장소",
+    ],
+  },
+  center: {
+    guidance:
+      "중앙선의 종류와 차량 위치, 반대 차로로 이동한 전후 과정 및 예외적인 도로 상황을 확인하세요.",
+    checklist: [
+      "중앙선 가시성",
+      "차량 위치",
+      "반대 차로 진입 여부",
+      "이동 전후 장면",
+      "차량 식별",
+    ],
+  },
+  cutin: {
+    guidance:
+      "차선 변경 전후 흐름과 주변 차량 간격, 방향지시등 및 다른 차량의 반응을 함께 확인하세요.",
+    checklist: [
+      "차선 가시성",
+      "차선 변경 과정",
+      "주변 차량과 거리",
+      "방향지시등 여부",
+      "전후 영상",
+    ],
+  },
+  stopLineCrosswalk: {
+    guidance:
+      "차량과 정지선·횡단보도의 상대 위치 및 보행자 통행에 영향을 주는 상황인지 확인하세요.",
+    checklist: [
+      "차량 위치",
+      "정지선 위치",
+      "횡단보도 위치",
+      "보행자 통행 방해 여부",
+      "차량 식별",
+      "촬영 시각",
+      "발생 장소",
+    ],
+  },
+  illegalUTurn: {
+    guidance:
+      "유턴 전후 진행 방향과 도로 표지·노면 표시, 해당 위치에서의 허용 여부를 함께 확인하세요.",
+    checklist: [
+      "유턴 표지·노면 표시",
+      "방향 전환 과정",
+      "유턴 전후 진행 방향",
+      "주변 차량과 보행자 상황",
+      "차량 식별",
+      "촬영 시각",
+      "발생 장소",
+    ],
+  },
+  intersection: {
+    guidance:
+      "교차로 진입·통과 과정과 지정 차로, 신호·노면 표시 및 주변 교통 흐름을 확인하세요.",
+    checklist: [
+      "교차로와 차로 가시성",
+      "신호·노면 표시",
+      "진입·통과 과정",
+      "차량 진행 방향",
+      "주변 교통 흐름",
+      "차량 식별",
+      "촬영 시각·장소",
+    ],
+  },
+  illegalParking: {
+    guidance:
+      "차량의 정차 위치와 주정차 금지 표지·노면 표시, 머문 시간 및 통행 방해 상황을 확인하세요.",
+    checklist: [
+      "차량 정차 위치",
+      "주정차 금지 표지·노면 표시",
+      "정차 지속 여부",
+      "차량·보행자 통행 방해 여부",
+      "예외 상황 여부",
+      "차량 식별",
+      "촬영 시각·장소",
+    ],
+  },
+  other: {
+    guidance:
+      "직접 확인한 교통 상황을 중심으로 관련 표지·차선과 차량 행동, 영향을 받은 도로 이용자를 살펴보세요.",
+    checklist: [
+      "관찰 가능한 상황",
+      "관련 교통표지·차선",
+      "차량 행동",
+      "주변 도로 이용자 영향",
+      "차량 식별",
+      "촬영 시각",
+      "발생 장소",
+    ],
+  },
+  unknown: {
+    guidance:
+      "합리적인 위반 후보를 정하기 어려운 상태입니다. 보이는 도로 요소와 차량 위치, 전후 맥락을 다시 확인하세요.",
+    checklist: [
+      "차량·도로 요소 가시성",
+      "교통표지·차선 가시성",
+      "차량 식별 가능 여부",
+      "이동 전후 맥락",
+      "촬영 시각",
+      "발생 장소",
+    ],
+  },
 };
 
 const STATUS_META: Record<
@@ -188,7 +297,10 @@ export function EvidenceDiagnosisView() {
           : "확인된 항목 중심";
   const isDemoSource = analysisIsDemo !== false;
   const reviewType = draft.violationType;
+  const typeEvidenceGuide = TYPE_EVIDENCE_GUIDES[reviewType];
   const changedType = reviewType !== selectedCandidate.type;
+  const needsTemporalEvidence =
+    usesProviderResult && imageAnalysisResult.needsTemporalEvidence;
 
   return (
     <div className="page-container space-y-6 pb-10 pt-4">
@@ -266,6 +378,14 @@ export function EvidenceDiagnosisView() {
         </InfoCard>
       ) : null}
 
+      {needsTemporalEvidence ? (
+        <InfoCard tone="orange" title="추가 영상 확인이 필요해요">
+          사진만으로 차량의 이동 과정을 확인할 수 없어 영상 확인이
+          필요합니다. 영상 기반 항목은 충족으로 간주하지 않고 불명확 또는
+          부족 상태로 확인해주세요.
+        </InfoCard>
+      ) : null}
+
       <section className="surface-card p-5" aria-labelledby="evidence-summary-title">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -316,8 +436,18 @@ export function EvidenceDiagnosisView() {
         tone="neutral"
         title={`${violationLabels[reviewType]} 참고 관찰 항목`}
       >
-        {TYPE_GUIDANCE[reviewType]} 이 목록은 법적 요건의 확정 목록이 아니며,
-        AI 응답에 없는 항목은 충족으로 추가하지 않았어요.
+        <p>
+          {typeEvidenceGuide.guidance} 이 목록은 법적 요건의 확정 목록이
+          아니며, AI 응답에 없는 항목은 충족으로 추가하지 않았어요.
+        </p>
+        <ul className="mt-3 grid gap-1.5 text-xs font-semibold text-[#5d7489]">
+          {typeEvidenceGuide.checklist.map((item) => (
+            <li key={item} className="flex items-start gap-2">
+              <span aria-hidden="true">•</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
       </InfoCard>
 
       <section aria-labelledby="evidence-detail-title">

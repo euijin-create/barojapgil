@@ -1,9 +1,16 @@
 import { z } from "zod";
 
+export const MEDIA_TYPES = ["IMAGE", "VIDEO"] as const;
+
 export const VIOLATION_TYPES = [
   "SIGNAL_VIOLATION",
   "CENTER_LINE_VIOLATION",
   "DANGEROUS_MERGE",
+  "STOP_LINE_OR_CROSSWALK",
+  "ILLEGAL_U_TURN",
+  "INTERSECTION_VIOLATION",
+  "ILLEGAL_PARKING",
+  "OTHER_TRAFFIC_VIOLATION",
   "UNKNOWN",
 ] as const;
 
@@ -13,6 +20,7 @@ export const EVIDENCE_ITEM_STATUSES = [
   "MISSING",
 ] as const;
 
+export const mediaTypeSchema = z.enum(MEDIA_TYPES);
 export const violationTypeSchema = z.enum(VIOLATION_TYPES);
 export const evidenceItemStatusSchema = z.enum(EVIDENCE_ITEM_STATUSES);
 
@@ -28,6 +36,7 @@ export const evidenceItemSchema = z.strictObject({
  */
 export const imageAnalysisResultSchema = z.strictObject({
   analysisId: z.string().min(1).max(128),
+  mediaType: mediaTypeSchema,
   suspectedViolation: z.boolean(),
   violationType: violationTypeSchema,
   confidence: z.number().min(0).max(1),
@@ -39,8 +48,10 @@ export const imageAnalysisResultSchema = z.strictObject({
   evidenceItems: z.array(evidenceItemSchema).max(20),
   missingEvidence: z.array(z.string().min(1).max(300)).max(20),
   warnings: z.array(z.string().min(1).max(500)).max(20),
+  needsTemporalEvidence: z.boolean(),
 });
 
+export type MediaType = z.infer<typeof mediaTypeSchema>;
 export type ViolationType = z.infer<typeof violationTypeSchema>;
 export type EvidenceItemStatus = z.infer<typeof evidenceItemStatusSchema>;
 export type EvidenceItem = z.infer<typeof evidenceItemSchema>;

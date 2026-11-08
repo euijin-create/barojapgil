@@ -1,11 +1,11 @@
 # 바로잡길 MVP 아키텍처
 
-- 문서 상태: 구현 전 권장 설계
-- 최종 갱신: 2026-09-06
+- 문서 상태: 현재 MVP 구현 및 확장 설계
+- 최종 갱신: 2026-11-08
 
 ## 1. 설계 목표
 
-이 문서는 현재의 mock 기반 MVP에서 향후 Supabase와 실제 AI API로 이동할 때 UI와 도메인 로직을 크게 다시 쓰지 않도록 경계를 정의한다.
+이 문서는 현재의 mock/실제 OpenAI 이미지 분석 기반 MVP에서 향후 Supabase와 영상 분석으로 확장할 때 UI와 도메인 로직을 크게 다시 쓰지 않도록 경계를 정의한다.
 
 핵심 목표:
 
@@ -18,7 +18,7 @@
 
 ## 2. 현재 프로젝트 기준
 
-현재 저장소는 기본 `create-next-app` 구조이며 실제 기능은 아직 없다.
+현재 저장소에는 모바일 UI 흐름과 provider 기반 이미지 분석이 구현되어 있다. `POST /api/analyze-image`가 서버에서 이미지 검증과 provider 선택을 수행하며, mock과 OpenAI provider가 같은 Structured Output 계약을 반환한다.
 
 | 항목 | 현재 값 |
 | --- | --- |
@@ -27,6 +27,7 @@
 | TypeScript | 5, `strict: true` |
 | Tailwind CSS | 4 |
 | 소스 루트 | `src/`, `@/* -> ./src/*` |
+| 이미지 AI | OpenAI Responses API, `gpt-6-astra`, Zod Structured Output, mock/openai provider |
 | 현재 검증 명령 | `npm run lint`, `npm run build` |
 
 Next.js 코드를 작성하기 전에는 저장소에 설치된 `node_modules/next/dist/docs/`의 관련 문서를 다시 확인한다. 이 설계에 반영한 Next.js 16 기준은 다음과 같다.
@@ -234,17 +235,43 @@ Server Component의 데이터 조회는 `/api`를 거치지 않고 DAL과 reposi
 
 ```ts
 type ViolationType =
-  | "signal_violation"
-  | "center_line_crossing"
-  | "dangerous_cut_in"
-  | "unknown";
+  | "SIGNAL_VIOLATION"
+  | "CENTER_LINE_VIOLATION"
+  | "DANGEROUS_MERGE"
+  | "STOP_LINE_OR_CROSSWALK"
+  | "ILLEGAL_U_TURN"
+  | "INTERSECTION_VIOLATION"
+  | "ILLEGAL_PARKING"
+  | "OTHER_TRAFFIC_VIOLATION"
+  | "UNKNOWN";
+
+type MediaType = "IMAGE" | "VIDEO";
 
 type EvidenceItemStatus =
-  | "satisfied"
-  | "partial"
-  | "missing"
-  | "unknown"
-  | "not_applicable";
+  | "CLEAR"
+  | "UNCERTAIN"
+  | "MISSING";
+
+interface AnalysisResult {
+  analysisId: string;
+  mediaType: MediaType;
+  suspectedViolation: boolean;
+  violationType: ViolationType;
+  confidence: number; // 0..1
+  summary: string;
+  reasoningSummary: string;
+  plateNumberCandidate: string | null;
+  occurredAtCandidate: string | null;
+  locationCandidate: string | null;
+  evidenceItems: Array<{
+    name: string;
+    status: EvidenceItemStatus;
+    description: string;
+  }>;
+  missingEvidence: string[];
+  warnings: string[];
+  needsTemporalEvidence: boolean;
+}
 
 type ValueSource =
   | "ai"
@@ -390,27 +417,51 @@ DB에는 공개 URL이 아니라 object path만 저장한다. 읽기용 서명 U
 
 ## 11. AI 분석 연결 설계
 
-### 11.1 단계
+### 11.1 현재 이미지 분석 경로
+
+현재 실제 이미지 흐름은 다음 경계를 유지한다.
+
+```text
+POST /api/analyze-image
+→ 서버 이미지 형식·크기·signature 검증
+→ ANALYSIS_PROVIDER에 따른 mock/openai provider 선택
+→ mock은 공통 계약 fixture 반환 / openai는 Responses API + gpt-6-astra + Structured Output
+→ 공통 Zod 계약 재검증
+→ 정제된 결과만 UI에 전달
+```
+
+`OPENAI_API_KEY`는 서버 전용 환경변수로만 읽으며 원본 provider 응답 전체를 브라우저에 전달하지 않는다. `mediaType`은 현재 이미지 Route에서 `IMAGE`로 설정하고, 향후 영상 프레임 분석기가 같은 분석 계약을 재사용할 때 `VIDEO`를 전달한다.
+
+### 11.2 미디어별 판단 지침
+
+- `IMAGE` prompt는 한 장에 보이는 정적 사실만 사용한다. 차량의 이전·이후 움직임, 진입 시점, 정차 지속 시간을 추측하지 않는다. 정지선·횡단보도·중앙선과 차량 위치, 표지·차선·신호등, 번호판 가시성처럼 관찰 가능한 요소를 분석한다.
+- 사진에서 시간적 증거가 부족해도 합리적인 후보가 있으면 낮은 신뢰도만을 이유로 `UNKNOWN`으로 보내지 않는다. 예상 유형과 불확실성을 설명하고 `needsTemporalEvidence: true`, `missingEvidence`에 필요한 전후 장면을 기록한다.
+- `VIDEO` prompt는 타임스탬프와 함께 시간순으로 정렬된 복수 프레임만 입력받는 것을 전제로 한다. 신호 변화와 진입 시점, 중앙선·차선 이동, 끼어들기, 정지선 통과, 유턴, 교차로 이동을 프레임 순서에 근거해 분석한다.
+- 현재는 영상 프레임 추출, coarse scan, 실제 복수 프레임 OpenAI 호출을 구현하지 않는다. 원본 동영상을 모델에 직접 보내지 않으며 영상 UI 후보는 데모 데이터다.
+- 두 prompt 모두 법적 결론을 내리지 않고 보이는 증거만 설명하며, 보이지 않는 시간·장소·번호판을 만들지 않는다. 최종 판단은 관계기관이 수행한다.
+
+### 11.3 단계
 
 분석을 재시도·관찰 가능한 단계로 나눈다.
 
 1. `preflight`: 미디어 검증, 메타데이터 파싱
 2. `candidate_detection`: 전체 영상 후보 탐색
 3. `fact_extraction`: 번호판 OCR, 시각, 위치 후보 추출
-4. `violation_classification`: 지원 3종과 unknown 분류
+4. `violation_classification`: 지원 8종 후보와 `UNKNOWN` 분류
 5. `evidence_assessment`: 유형별 관찰 체크리스트 평가
 6. `report_draft_generation`: 사실 중심 문장 초안 생성
 7. `package_generation`: 사용자 확인 뒤 핵심 미디어와 snapshot 생성
 
 패키지 생성은 AI 분석 작업과 분리한다. 사용자가 값을 수정한 뒤 최신 revision으로 다시 생성할 수 있어야 하기 때문이다.
 
-### 11.2 버전형 계약
+### 11.4 버전형 계약
 
 `AnalysisResultV1`은 최소한 다음을 포함한다.
 
 - `schemaVersion`, `jobId`, 처리 상태
 - 후보 배열과 각 `startMs/endMs`
 - 예상 유형, 탐지 신뢰도, 분류 신뢰도
+- `mediaType`과 시간 증거 필요 여부 `needsTemporalEvidence`
 - 관찰 사실 중심 참고 근거
 - 차량번호·시각·장소 제안과 필드별 신뢰도·출처
 - evidence item 코드, 상태, 근거, 관련 구간
@@ -418,7 +469,9 @@ DB에는 공개 URL이 아니라 object path만 저장한다. 읽기용 서명 U
 
 외부 AI 출력은 신뢰하지 않는다. webhook payload와 결과를 런타임 스키마로 검증하고, enum·길이·범위·시간 구간·신뢰도 값을 정규화한 뒤에만 저장한다. 잘못된 결과는 안전한 오류 코드와 함께 실패 처리하고 그대로 UI에 렌더링하지 않는다.
 
-### 11.3 비동기 처리 흐름
+`UNKNOWN`은 어떤 위반 후보도 합리적으로 제시할 수 없을 때만 사용한다. 단일 사진에서 후보는 관찰되지만 이동 과정이 부족하면 후보 유형을 유지하고 `needsTemporalEvidence`와 부족한 증거를 함께 반환한다.
+
+### 11.5 비동기 처리 흐름
 
 1. 업로드 완료 use case가 고유 idempotency key로 `analysis_jobs`를 만든다.
 2. 내구성 있는 queue 또는 분석 제공자에 job을 제출한다.
@@ -431,7 +484,7 @@ DB에는 공개 URL이 아니라 object path만 저장한다. 읽기용 서명 U
 
 Next.js는 작업 시작·상태 조회·webhook 경계만 담당한다. 영상 디코딩, ffmpeg, 장시간 모델 호출은 별도 worker에서 처리한다.
 
-### 11.4 AI 개인정보 경계
+### 11.6 AI 개인정보 경계
 
 - AI 키는 서버 또는 worker에만 둔다.
 - 제공자별 데이터 보존, 모델 학습 사용, 처리 지역, 하위 처리자를 출시 전에 검토한다.
@@ -445,8 +498,23 @@ AI가 관찰 사실을 추출하고, 버전형 규칙이 위반 유형별 체크
 
 - 관찰값: 신호 색, 차선/중앙선, 차량 궤적, 관련 시점 등
 - 규칙: 유형별 필요한 관찰 조합과 상태 계산
-- 결과: item별 `satisfied/partial/missing/unknown`과 설명
+- 결과: item별 `CLEAR/UNCERTAIN/MISSING`과 설명
 - 표시: `증거가 충분해 보임/추가 확인 필요/부족/판단 불가`
+
+유형별 기본 체크리스트는 다음처럼 분리한다.
+
+| 예상 유형 | 기본 증거 항목 |
+| --- | --- |
+| 신호위반 | 차량 식별, 신호 상태, 차량 진입 시점, 정지선·교차로 위치, 전후 상황, 시각, 장소 |
+| 정지선·횡단보도 침범 | 차량 위치, 정지선 위치, 횡단보도 위치, 보행자 통행 방해 여부, 차량 식별, 시각, 장소 |
+| 중앙선 침범 | 중앙선 가시성, 차량 위치, 반대 차로 진입 여부, 이동 전후 장면, 차량 식별 |
+| 위험 끼어들기 | 차선 가시성, 차선 변경 과정, 주변 차량과 거리, 방향지시등 여부, 전후 영상 |
+| 불법 유턴 | 금지 표지·노면표시, 회전 경로, 금지 구간·신호 상태, 이동 전후 장면, 차량 식별 |
+| 교차로 통행방법 위반 | 차로·표지·신호, 진입 위치, 교차로 내부 이동, 통행 방해 정황, 전후 장면, 차량 식별 |
+| 불법 주정차 | 정지 위치, 금지 표지·노면표시, 정차 지속 정황, 통행 방해 여부, 차량 식별, 시각, 장소 |
+| 기타 교통위반 | 관찰된 행동, 관련 교통시설·표지, 차량 식별, 시각, 장소, 추가 확인 항목 |
+
+사진에서 확인할 수 없는 시간 기반 항목은 `UNCERTAIN` 또는 `MISSING`으로 반환한다. 규칙은 `mediaType`을 입력으로 받고, `VIDEO`일 때만 순서가 명시된 복수 프레임의 이동 증거를 사용할 수 있다.
 
 규칙에는 `ruleVersion`, 근거 출처, 검수일을 둔다. 사용자가 위반 유형을 바꾸면 같은 관찰값에 새 유형 규칙을 적용한다. 법령이나 공식 신고 기준 변경 시 기존 결과를 조용히 바꾸지 않고 재평가 여부를 명시한다.
 

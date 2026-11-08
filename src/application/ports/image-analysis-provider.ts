@@ -6,6 +6,7 @@ export type AnalysisProviderName = "mock" | "openai";
 export interface AnalyzeImageInput {
   bytes: Uint8Array;
   mimeType: ImageMimeType;
+  mediaType: "IMAGE";
 }
 
 export interface ImageAnalysisProvider {

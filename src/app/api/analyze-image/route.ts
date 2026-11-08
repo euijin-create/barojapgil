@@ -182,6 +182,7 @@ export async function POST(request: Request) {
     const result = await provider.analyzeImage({
       bytes,
       mimeType: verifiedMimeType,
+      mediaType: "IMAGE",
     });
 
     return jsonResponse({ result, provider: name, isDemo });

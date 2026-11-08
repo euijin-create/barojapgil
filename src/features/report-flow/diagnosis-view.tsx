@@ -45,10 +45,12 @@ function AnalysisFact({
 }
 
 export default function DiagnosisView() {
-  const { selectedCandidate, analysisIsDemo } = useDemo();
+  const { selectedCandidate, imageAnalysisResult, analysisIsDemo } = useDemo();
   const confidence = confidencePercent(selectedCandidate.confidence);
   const needsMoreReview =
-    selectedCandidate.type === "unknown" || confidence < 70;
+    selectedCandidate.type === "unknown" ||
+    confidence < 70 ||
+    imageAnalysisResult?.needsTemporalEvidence === true;
   const occurredAt =
     selectedCandidate.occurredAt.trim().replace("T", " ") || "확인 필요";
 
@@ -99,6 +101,13 @@ export default function DiagnosisView() {
       {analysisIsDemo !== false ? (
         <InfoCard tone="orange" title="체험용 예시 결과">
           {MOCK_ANALYSIS_NOTICE}
+        </InfoCard>
+      ) : null}
+
+      {imageAnalysisResult?.needsTemporalEvidence ? (
+        <InfoCard tone="orange" title="이동 과정 확인이 필요해요">
+          사진 한 장에서는 차량의 이전·이후 움직임을 확인할 수 없습니다.
+          영상이나 전후 장면을 추가로 확인해주세요.
         </InfoCard>
       ) : null}
 
