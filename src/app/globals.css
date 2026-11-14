@@ -567,6 +567,44 @@ a {
   place-items: center;
 }
 
+.risk-map-zone-marker {
+  display: flex;
+  min-width: 64px;
+  min-height: 48px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px 10px;
+  border: 2px solid #168f73;
+  border-radius: 13px;
+  color: #12304a;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 4px 12px rgba(18, 48, 74, 0.16);
+  transform-origin: center;
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+
+.risk-map-zone-marker:hover,
+.risk-map-zone-marker:focus-visible,
+.risk-map-zone-marker.is-selected {
+  border-color: var(--primary);
+  transform: scale(1.06);
+}
+
+.risk-map-zone-marker__status {
+  color: #a45e09;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.risk-map-zone-marker__count {
+  color: var(--navy);
+  font-size: 14px;
+  line-height: 1;
+}
+
 @media (min-width: 640px) {
   /* 데스크톱에서도 모바일 앱 폭과 한 열 흐름을 유지한다. */
   .app-shell .sm\:grid-cols-3 {

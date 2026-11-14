@@ -693,6 +693,32 @@ AI가 관찰 사실을 추출하고, 버전형 규칙이 위반 유형별 체크
 
 ## 14. 교통위험지도 개인정보 설계
 
+### 14.1 현재 지도 클라이언트 구조
+
+`/risk-map`의 Server Component는 빌드 환경의 `NEXT_PUBLIC_KAKAO_MAP_KEY`를 지도 Client Component에 전달한다. JavaScript SDK 키는 브라우저 공개용 플랫폼 키이므로 Kakao Developers에서 허용 도메인을 제한하며, 서버 전용 키나 OpenAI 키와 혼용하지 않는다. SDK는 위험지도 화면에서만 `autoload=false`로 한 번 로드하고 `kakao.maps.load` 콜백 이후 지도 인스턴스를 만든다.
+
+지도 Client Component는 다음 경계를 갖는다.
+
+```text
+RiskMapView
+├─ LayerSelector
+├─ KakaoMapSdk              # script 중복 방지, timeout과 load 오류
+├─ KakaoTrafficMap          # 지도 생명주기와 Kakao overlay adapter
+├─ demo aggregate areas     # 합성 구역 중심·반경, 실제 사건 아님
+└─ RiskAreaDetailCard       # 공개 가능한 구역 요약만 표시
+```
+
+레이어 계약은 `TRAFFIC | ACCIDENT_HOTSPOT | INCIDENT | BAROJAPGIL_REPORT`로 분리한다. `종합`은 별도 데이터 레이어가 아니라 현재 사용 가능한 `TRAFFIC`과 `BAROJAPGIL_REPORT`를 함께 켜는 UI preset이다.
+
+- `TRAFFIC`: Kakao Maps의 `MapTypeId.TRAFFIC` 실제 오버레이. 선택에 따라 `addOverlayMapTypeId`/`removeOverlayMapTypeId`로 전환한다.
+- `ACCIDENT_HOTSPOT`: 향후 도로교통공단 TAAS adapter가 채울 준비 중 레이어다.
+- `INCIDENT`: 향후 서울 TOPIS 사고·공사·통제 adapter가 채울 준비 중 레이어다.
+- `BAROJAPGIL_REPORT`: 실제 DB 연결 전까지 DEMO 합성 집계구역만 표시한다.
+
+`window.kakao` 접근, 지도와 overlay 생성은 Client Component effect 안에서만 수행한다. 키 누락, SDK 네트워크 오류, 허용 도메인 오류 또는 초기화 예외는 지도 영역의 명시적 오류 상태로 수렴시키며 다른 앱 화면과 AI 분석 경계에는 전파하지 않는다.
+
+### 14.2 비식별 집계 데이터 흐름
+
 데이터 흐름:
 
 1. 사용자가 지도 제공에 별도로 동의한다.
