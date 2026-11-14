@@ -22,6 +22,7 @@ import {
   type ImageAnalysisResult,
   type ViolationTypeCode,
 } from "@/contracts/analysis-v1";
+import { formatOccurredAtForStatement } from "@/features/report-flow/occurred-at";
 
 export interface ReportDraft {
   plate: string;
@@ -86,6 +87,11 @@ const VIOLATION_TYPE_MAP: Record<ViolationTypeCode, ViolationType> = {
 
 function unique(items: string[]): string[] {
   return [...new Set(items.filter((item) => item.trim().length > 0))];
+}
+
+function normalizeCandidateValue(value: string, missingLabels: string[]) {
+  const normalized = value.trim();
+  return missingLabels.includes(normalized) ? "" : normalized;
 }
 
 function toCandidate(result: ImageAnalysisResult): Candidate {
@@ -212,48 +218,43 @@ function friendlyAnalysisError(code: string, status?: number): AnalysisRequestEr
 function createStatement(
   candidate: Candidate,
   values?: ReportDraft,
-  isDemo = true,
 ): string {
-  const time = (values?.occurredAt ?? candidate.occurredAt).replace("T", " ") || "[발생 시각 확인 필요]";
-  const location = values
-    ? values.location.trim() || "[장소 확인 필요]"
-    : candidate.location || "[장소 확인 필요]";
-  const suggestedPlate = values ? values.plate.trim() : candidate.plate;
-  const plate =
-    suggestedPlate && suggestedPlate !== "확인 필요"
-      ? suggestedPlate
-      : "[차량번호 확인 필요]";
-  const vehicle =
-    plate === "[차량번호 확인 필요]"
-      ? "차량번호를 확인할 수 없는 차량"
-      : "차량번호 " + plate + "로 보이는 차량";
+  const occurredAt = values?.occurredAt ?? candidate.occurredAt;
+  const time =
+    formatOccurredAtForStatement(occurredAt) ?? "[발생 일시 확인 필요]";
+  const location = normalizeCandidateValue(
+    values?.location ?? candidate.location,
+    ["장소 확인 필요", "확인 필요"],
+  ) || "[발생 장소 확인 필요]";
+  const plate = normalizeCandidateValue(
+    values?.plate ?? candidate.plate,
+    ["확인 필요", "차량번호 확인 필요"],
+  ) || "[차량번호 확인 필요]";
   const type = values?.violationType ?? candidate.type;
+  const reviewedType =
+    type === "other" && values?.violationTypeDetail.trim()
+      ? values.violationTypeDetail.trim()
+      : violationLabels[type];
   const medium = candidate.start === "단일 사진" ? "사진" : "영상";
   const observedScene =
     type === "unknown"
-      ? "위반 유형과 주변 상황을 원본 자료에서 확인해 주시기 바랍니다."
-      : `${violationLabels[type]} 의심 장면으로 보이는 부분을 확인해 주시기 바랍니다.`;
-  return (
-    (isDemo
-      ? "※ 체험용 문장 예시입니다. 실제 자료와 대조해 수정해 주세요.\n"
-      : "※ AI 참고 분석을 바탕으로 작성한 초안입니다. 원본 자료와 대조해 수정해 주세요.\n") +
-    time +
-    "경 " +
-    location +
-    "에서 촬영한 자료입니다. " +
-    medium +
-    "에 " +
-    vehicle +
-    "이 담겼습니다. " +
-    observedScene
-  );
+      ? `${reviewedType} 상태로 교통 상황의 추가 확인이 필요합니다.`
+      : `${reviewedType} 의심 상황을 확인했습니다.`;
+
+  return `${time} ${location} 부근에서 차량번호 ${plate} 차량과 관련해 ${observedScene} 첨부한 ${medium}을 확인해주시기 바랍니다.`;
 }
 
-function createDraft(candidate: Candidate, isDemo = true): ReportDraft {
-  return {
-    plate: candidate.plate,
+function createDraft(candidate: Candidate): ReportDraft {
+  const draft: ReportDraft = {
+    plate: normalizeCandidateValue(candidate.plate, [
+      "확인 필요",
+      "차량번호 확인 필요",
+    ]),
     occurredAt: candidate.occurredAt,
-    location: candidate.location,
+    location: normalizeCandidateValue(candidate.location, [
+      "장소 확인 필요",
+      "확인 필요",
+    ]),
     violationType: candidate.type,
     violationReviewMode:
       candidate.type === "unknown"
@@ -262,8 +263,11 @@ function createDraft(candidate: Candidate, isDemo = true): ReportDraft {
           ? "other"
           : "supported",
     violationTypeDetail: "",
-    statement: createStatement(candidate, undefined, isDemo),
+    statement: "",
   };
+
+  draft.statement = createStatement(candidate, draft);
+  return draft;
 }
 
 const DemoContext = createContext<DemoContextValue | null>(null);
@@ -384,7 +388,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       setAnalysisProvider(provider);
       setAnalysisIsDemo(isDemo);
       setSelectedCandidateId(candidate.id);
-      setDraft(createDraft(candidate, isDemo));
+      setDraft(createDraft(candidate));
       statementEditedRef.current = false;
       setAnalysisStatus("success");
     } catch (error) {
@@ -452,12 +456,12 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       const candidate = candidates.find((item) => item.id === id);
       if (!candidate) return;
       setSelectedCandidateId(id);
-      setDraft(createDraft(candidate, analysisIsDemo ?? true));
+      setDraft(createDraft(candidate));
       statementEditedRef.current = false;
       setSubmissionReady(false);
       setReportComplete(false);
     },
-    [analysisIsDemo, candidates],
+    [candidates],
   );
 
   const updateDraft = useCallback(
@@ -471,31 +475,24 @@ export function DemoProvider({ children }: { children: ReactNode }) {
           (patch.plate !== undefined ||
             patch.occurredAt !== undefined ||
             patch.location !== undefined ||
-            patch.violationType !== undefined)
+            patch.violationType !== undefined ||
+            patch.violationTypeDetail !== undefined)
         ) {
-          next.statement = createStatement(
-            selectedCandidate,
-            next,
-            analysisIsDemo ?? true,
-          );
+          next.statement = createStatement(selectedCandidate, next);
         }
         return next;
       });
     },
-    [analysisIsDemo, selectedCandidate],
+    [selectedCandidate],
   );
 
   const regenerateStatement = useCallback(() => {
     statementEditedRef.current = false;
     setDraft((current) => ({
       ...current,
-      statement: createStatement(
-        selectedCandidate,
-        current,
-        analysisIsDemo ?? true,
-      ),
+      statement: createStatement(selectedCandidate, current),
     }));
-  }, [analysisIsDemo, selectedCandidate]);
+  }, [selectedCandidate]);
 
   const markSubmissionReady = useCallback(() => {
     setSubmissionReady(true);

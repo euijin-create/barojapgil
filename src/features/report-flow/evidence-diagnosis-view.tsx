@@ -1,16 +1,11 @@
 "use client";
 
-import {
-  InfoCard,
-  PrimaryButton,
-  SectionLabel,
-  StatusBadge,
-} from "@/components/ui";
+import { PrimaryButton, StatusBadge } from "@/components/ui";
 import { useDemo } from "@/features/demo/demo-context";
 import { violationLabels, type ViolationType } from "@/lib/demo-data";
 
 const AI_DIAGNOSIS_NOTICE =
-  "AI 참고 진단이며 실제 접수·처분 여부는 관계기관이 판단합니다.";
+  "AI 참고 진단이며 최종 판단은 관계기관이 합니다.";
 const MOCK_ANALYSIS_NOTICE =
   "현재 데모 분석 결과이며 실제 업로드 파일을 AI가 판독한 결과가 아닙니다.";
 
@@ -234,6 +229,97 @@ function demoDiagnosisItems(
   ];
 }
 
+function matchesItem(item: DiagnosisItem, pattern: RegExp) {
+  return pattern.test(`${item.title} ${item.description}`);
+}
+
+function prioritizeDiagnosisItems(items: DiagnosisItem[]) {
+  const selected: DiagnosisItem[] = [];
+  const selectedIds = new Set<string>();
+
+  const pickFirst = (predicate: (item: DiagnosisItem) => boolean) => {
+    const item = items.find(
+      (candidate) => !selectedIds.has(candidate.id) && predicate(candidate),
+    );
+    if (!item) return;
+    selected.push(item);
+    selectedIds.add(item.id);
+  };
+
+  const isVehicle = (item: DiagnosisItem) =>
+    matchesItem(item, /차량 식별|번호판|대상 차량/);
+  const isTime = (item: DiagnosisItem) =>
+    matchesItem(item, /발생 시각|촬영 시각|시간 정보|타임스탬프/);
+  const isLocation = (item: DiagnosisItem) =>
+    matchesItem(item, /발생 장소|장소 정보|도로명|주소/);
+  const isTemporal = (item: DiagnosisItem) =>
+    matchesItem(
+      item,
+      /전후|진입 시점|이동 과정|변경 과정|통과 과정|정차 지속|진행 방향/,
+    );
+  const isCoreSituation = (item: DiagnosisItem) =>
+    !isVehicle(item) &&
+    !isTime(item) &&
+    !isLocation(item) &&
+    !isTemporal(item) &&
+    !item.title.startsWith("추가로 필요한 증거");
+
+  pickFirst(isVehicle);
+  pickFirst(isCoreSituation);
+  pickFirst(isTime);
+  pickFirst(isLocation);
+  pickFirst(isTemporal);
+
+  for (const item of items) {
+    if (selected.length >= 5) break;
+    if (selectedIds.has(item.id)) continue;
+    selected.push(item);
+    selectedIds.add(item.id);
+  }
+
+  return {
+    primaryItems: selected,
+    additionalItems: items.filter((item) => !selectedIds.has(item.id)),
+  };
+}
+
+function compactDescription(item: DiagnosisItem) {
+  const subject = item.title.replace(/^추가로 필요한 증거 \d+$/, "추가 증거");
+
+  if (matchesItem(item, /차량 식별|번호판|대상 차량/)) {
+    if (item.status === "clear") return "차량과 번호판 확인 가능";
+    if (item.status === "uncertain") return "번호판 추가 확인 필요";
+    return "차량 식별 정보 없음";
+  }
+
+  if (matchesItem(item, /발생 시각|촬영 시각|시간 정보|타임스탬프/)) {
+    if (item.status === "clear") return "시각 정보 확인 가능";
+    if (item.status === "uncertain") return "시각 정보 확인 필요";
+    return "시각 정보 없음";
+  }
+
+  if (matchesItem(item, /발생 장소|장소 정보|도로명|주소/)) {
+    if (item.status === "clear") return "장소 정보 확인 가능";
+    if (item.status === "uncertain") return "장소 정보 확인 필요";
+    return "장소 정보 없음";
+  }
+
+  if (
+    matchesItem(
+      item,
+      /전후|진입 시점|이동 과정|변경 과정|통과 과정|정차 지속|진행 방향/,
+    )
+  ) {
+    if (item.status === "clear") return "전후 흐름 확인 가능";
+    if (item.status === "uncertain") return "전후 장면 추가 필요";
+    return "전후 장면 없음";
+  }
+
+  if (item.status === "clear") return `${subject} 확인 가능`;
+  if (item.status === "uncertain") return `${subject} 추가 확인 필요`;
+  return `${subject} 정보 없음`;
+}
+
 function EvidenceItemCard({ item }: { item: DiagnosisItem }) {
   const meta = STATUS_META[item.status];
 
@@ -256,8 +342,8 @@ function EvidenceItemCard({ item }: { item: DiagnosisItem }) {
             </h3>
             <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
           </div>
-          <p className="mt-2 text-sm leading-6 text-[#617b94]">
-            {item.description}
+          <p className="mt-1 line-clamp-2 text-sm leading-5 text-[#617b94]">
+            {compactDescription(item)}
           </p>
         </div>
       </div>
@@ -278,6 +364,7 @@ export function EvidenceDiagnosisView() {
   const items = usesProviderResult
     ? providerDiagnosisItems(imageAnalysisResult)
     : demoDiagnosisItems(selectedCandidate.evidence);
+  const { primaryItems, additionalItems } = prioritizeDiagnosisItems(items);
   const counts = {
     clear: items.filter((item) => item.status === "clear").length,
     uncertain: items.filter((item) => item.status === "uncertain").length,
@@ -287,14 +374,6 @@ export function EvidenceDiagnosisView() {
   const score = totalCount > 0
     ? Math.floor((counts.clear / totalCount) * 100)
     : 0;
-  const overallStatus =
-    totalCount === 0
-      ? "진단 항목 확인 필요"
-      : counts.missing > 0
-        ? "증거 보강 필요"
-        : counts.uncertain > 0
-          ? "추가 확인 필요"
-          : "확인된 항목 중심";
   const isDemoSource = analysisIsDemo !== false;
   const reviewType = draft.violationType;
   const typeEvidenceGuide = TYPE_EVIDENCE_GUIDES[reviewType];
@@ -303,186 +382,153 @@ export function EvidenceDiagnosisView() {
     usesProviderResult && imageAnalysisResult.needsTemporalEvidence;
 
   return (
-    <div className="page-container space-y-6 pb-10 pt-4">
+    <div className="page-container space-y-5 pb-10 pt-4">
       <section className="overflow-hidden rounded-2xl bg-[var(--navy)] p-6 text-white">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <StatusBadge tone="blue">AI 참고 진단</StatusBadge>
-          <StatusBadge
-            tone={counts.missing > 0 || totalCount === 0 ? "orange" : "mint"}
-          >
-            {overallStatus}
-          </StatusBadge>
+        <div className="flex items-end justify-between gap-4">
+          <h1 className="text-[27px] font-extrabold leading-tight tracking-[-0.05em]">
+            신고 증거 충족도
+          </h1>
+          <strong className="shrink-0 text-4xl font-extrabold tabular-nums">
+            {score}
+            <span className="ml-1 text-base text-[#bcd0e0]">/ 100</span>
+          </strong>
         </div>
 
-        <SectionLabel className="mt-7 text-[#9fc9f7]">
-          증거 점검 결과
-        </SectionLabel>
-        <h1 className="mt-2 text-[29px] font-extrabold leading-[1.28] tracking-[-0.05em]">
-          신고 증거 충족도
-        </h1>
-
-        <div className="mt-7 rounded-xl border border-white/15 bg-white/8 p-4">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-bold text-[#bcd0e0]">0~100 참고 점수</p>
-              <p className="mt-1 text-sm font-semibold text-[#e1ebf3]">
-                {violationLabels[reviewType]} 기준 확인 자료
-              </p>
-            </div>
-            <strong className="text-4xl font-extrabold tabular-nums">
-              {score}
-              <span className="ml-1 text-base text-[#bcd0e0]">/100</span>
-            </strong>
-          </div>
+        <div
+          className="mt-5 h-2 overflow-hidden rounded-full bg-white/15"
+          role="meter"
+          aria-label="신고 증거 충족도 참고 점수"
+          aria-valuenow={score}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
           <div
-            className="mt-4 h-2 overflow-hidden rounded-full bg-white/15"
-            role="meter"
-            aria-label="신고 증거 충족도 참고 점수"
-            aria-valuenow={score}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div
-              className="h-full rounded-full bg-[#68d4b8] transition-[width] duration-500"
-              style={{ width: `${score}%` }}
-            />
-          </div>
-          <p className="mt-4 text-xs leading-5 text-[#c7d8e5]">
-            {totalCount > 0
-              ? `참고 점수 = 충족 ${counts.clear}개 ÷ 전체 진단 ${totalCount}개 × 100 (소수점 이하 내림). 불명확·부족 항목은 충족 점수에 포함하지 않았어요.`
-              : "진단할 증거 항목이 없어 참고 점수는 0점으로 표시했어요."}
-            {" "}AI가 화면 안에서 계산한 참고 점수이며 공식기관의 신고 가능
-            여부를 뜻하지 않습니다.
-          </p>
-        </div>
-      </section>
-
-      <InfoCard tone="blue" title="판단 주체 안내">
-        {AI_DIAGNOSIS_NOTICE}
-      </InfoCard>
-
-      {isDemoSource ? (
-        <InfoCard tone="orange" title="데모 증거 진단">
-          {MOCK_ANALYSIS_NOTICE}{" "}
-          {usesProviderResult
-            ? "구조화된 데모 응답의 증거 항목을 그대로 표시했어요."
-            : "선택한 체험용 후보의 증거 문구를 상태별 항목으로 변환했어요."}
-        </InfoCard>
-      ) : null}
-
-      {changedType ? (
-        <InfoCard tone="orange" title="예상 유형을 변경했어요">
-          현재 증거 항목은 원래 AI 제안에서 가져온 값이며, 변경한 유형에 맞춰
-          재분석한 결과가 아니에요. 원본 자료와 아래 참고 관찰 항목을 다시
-          확인해 주세요.
-        </InfoCard>
-      ) : null}
-
-      {needsTemporalEvidence ? (
-        <InfoCard tone="orange" title="추가 영상 확인이 필요해요">
-          사진만으로 차량의 이동 과정을 확인할 수 없어 영상 확인이
-          필요합니다. 영상 기반 항목은 충족으로 간주하지 않고 불명확 또는
-          부족 상태로 확인해주세요.
-        </InfoCard>
-      ) : null}
-
-      <section className="surface-card p-5" aria-labelledby="evidence-summary-title">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-extrabold tracking-[0.07em] text-[var(--primary)]">
-              상태별 요약
-            </p>
-            <h2
-              id="evidence-summary-title"
-              className="mt-1 text-lg font-extrabold text-[var(--navy)]"
-            >
-              확인된 증거 항목
-            </h2>
-          </div>
-          <StatusBadge tone="neutral">
-            {usesProviderResult ? "구조화 AI 응답 기반" : "데모 변환"}
-          </StatusBadge>
+            className="h-full rounded-full bg-[#68d4b8] transition-[width] duration-500"
+            style={{ width: `${score}%` }}
+          />
         </div>
 
         <dl className="mt-5 grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-[var(--mint-soft)] p-3 text-center">
-            <dt className="text-[11px] font-extrabold text-[var(--mint-dark)]">
-              ✓ 충족
-            </dt>
-            <dd className="mt-1 text-xl font-extrabold text-[var(--navy)]">
-              {counts.clear}
-            </dd>
+          <div className="rounded-xl bg-white/10 px-2 py-3 text-center">
+            <dt className="text-xs font-bold text-[#bce9dc]">충족</dt>
+            <dd className="mt-1 text-2xl font-extrabold">{counts.clear}</dd>
           </div>
-          <div className="rounded-xl bg-[var(--orange-soft)] p-3 text-center">
-            <dt className="text-[11px] font-extrabold text-[#a45e09]">
-              △ 불명확
-            </dt>
-            <dd className="mt-1 text-xl font-extrabold text-[var(--navy)]">
-              {counts.uncertain}
-            </dd>
+          <div className="rounded-xl bg-white/10 px-2 py-3 text-center">
+            <dt className="text-xs font-bold text-[#ffd99e]">불명확</dt>
+            <dd className="mt-1 text-2xl font-extrabold">{counts.uncertain}</dd>
           </div>
-          <div className="rounded-xl bg-[#f5eaef] p-3 text-center">
-            <dt className="text-[11px] font-extrabold text-[#a34b67]">
-              × 부족
-            </dt>
-            <dd className="mt-1 text-xl font-extrabold text-[var(--navy)]">
-              {counts.missing}
-            </dd>
+          <div className="rounded-xl bg-white/10 px-2 py-3 text-center">
+            <dt className="text-xs font-bold text-[#e6c9d3]">부족</dt>
+            <dd className="mt-1 text-2xl font-extrabold">{counts.missing}</dd>
           </div>
         </dl>
       </section>
 
-      <InfoCard
-        tone="neutral"
-        title={`${violationLabels[reviewType]} 참고 관찰 항목`}
-      >
-        <p>
-          {typeEvidenceGuide.guidance} 이 목록은 법적 요건의 확정 목록이
-          아니며, AI 응답에 없는 항목은 충족으로 추가하지 않았어요.
+      {isDemoSource ? (
+        <p
+          className="rounded-xl bg-[var(--orange-soft)] px-4 py-3 text-xs font-semibold leading-5 text-[#76501d]"
+          role="note"
+        >
+          {MOCK_ANALYSIS_NOTICE}
         </p>
-        <ul className="mt-3 grid gap-1.5 text-xs font-semibold text-[#5d7489]">
-          {typeEvidenceGuide.checklist.map((item) => (
-            <li key={item} className="flex items-start gap-2">
-              <span aria-hidden="true">•</span>
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-      </InfoCard>
+      ) : null}
+
+      {changedType || needsTemporalEvidence ? (
+        <div className="space-y-2" role="note">
+          {changedType ? (
+            <p className="rounded-xl bg-[var(--orange-soft)] px-4 py-3 text-sm font-semibold text-[#76501d]">
+              유형 변경됨 · 기존 AI 증거는 재분석되지 않았어요.
+            </p>
+          ) : null}
+          {needsTemporalEvidence ? (
+            <p className="rounded-xl bg-[var(--orange-soft)] px-4 py-3 text-sm font-semibold text-[#76501d]">
+              전후 장면 확인이 필요해요.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <section aria-labelledby="evidence-detail-title">
         <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-extrabold tracking-[0.07em] text-[var(--primary)]">
-              항목별 설명
-            </p>
-            <h2
-              id="evidence-detail-title"
-              className="mt-1 text-lg font-extrabold text-[var(--navy)]"
-            >
-              무엇이 보이고 부족한지 확인해요
-            </h2>
-          </div>
+          <h2
+            id="evidence-detail-title"
+            className="text-lg font-extrabold text-[var(--navy)]"
+          >
+            핵심 증거
+          </h2>
           <span className="text-xs font-bold text-[var(--ink-muted)]">
-            총 {totalCount}개
+            {primaryItems.length}개
           </span>
         </div>
 
-        {items.length > 0 ? (
-          <ul className="mt-4 space-y-3">
-            {items.map((item) => (
+        {primaryItems.length > 0 ? (
+          <ul className="mt-3 space-y-2.5">
+            {primaryItems.map((item) => (
               <EvidenceItemCard key={item.id} item={item} />
             ))}
           </ul>
         ) : (
-          <InfoCard tone="orange" title="진단 항목이 없어요" className="mt-4">
-            AI가 확인한 증거 항목이 없습니다. 원본 자료를 직접 살펴보고 필요한
-            장면을 보강해 주세요.
-          </InfoCard>
+          <p className="mt-3 rounded-xl bg-[var(--orange-soft)] px-4 py-3 text-sm font-semibold text-[#76501d]">
+            확인된 증거 항목이 없어요.
+          </p>
         )}
       </section>
 
-      <p className="rounded-xl bg-[#f3f6f9] px-4 py-3 text-xs font-semibold leading-5 text-[#667f96]">
+      {additionalItems.length > 0 ? (
+        <details className="surface-card group p-5">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 font-extrabold text-[var(--navy)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]">
+            <span>추가 확인 항목 보기</span>
+            <span className="text-sm text-[var(--ink-muted)]">
+              {additionalItems.length}개 <span aria-hidden="true">⌄</span>
+            </span>
+          </summary>
+          <ul className="mt-3 space-y-2.5 border-t border-[#e1eaf2] pt-4">
+            {additionalItems.map((item) => (
+              <EvidenceItemCard key={item.id} item={item} />
+            ))}
+          </ul>
+        </details>
+      ) : null}
+
+      <details className="surface-card p-5">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 font-extrabold text-[var(--navy)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]">
+          <span>자세히 보기</span>
+          <span className="text-sm text-[var(--ink-muted)]" aria-hidden="true">
+            ⌄
+          </span>
+        </summary>
+        <div className="mt-3 space-y-5 border-t border-[#e1eaf2] pt-4 text-sm leading-6 text-[#5d7489]">
+          <div>
+            <h3 className="font-extrabold text-[var(--navy)]">
+              {violationLabels[reviewType]} 참고 항목
+            </h3>
+            <p className="mt-1">{typeEvidenceGuide.guidance}</p>
+            <ul className="mt-2 grid gap-1 text-xs font-semibold">
+              {typeEvidenceGuide.checklist.map((item) => (
+                <li key={item}>• {item}</li>
+              ))}
+            </ul>
+          </div>
+
+          {items.length > 0 ? (
+            <div>
+              <h3 className="font-extrabold text-[var(--navy)]">
+                AI 상세 설명
+              </h3>
+              <ul className="mt-2 space-y-3">
+                {items.map((item) => (
+                  <li key={`detail-${item.id}`}>
+                    <p className="font-bold text-[var(--navy)]">{item.title}</p>
+                    <p>{item.description}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </details>
+
+      <p className="text-center text-xs font-semibold leading-5 text-[#667f96]">
         {AI_DIAGNOSIS_NOTICE}
       </p>
 
