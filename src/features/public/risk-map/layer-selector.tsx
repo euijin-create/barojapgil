@@ -20,7 +20,7 @@ function selectionDescription(selection: MapLayerSelection) {
     return {
       badge: "실제 + DEMO",
       badgeClassName: "bg-[#edf6ff] text-[#2569bc]",
-      text: "Kakao 실시간 교통과 바로잡길 데모 집계를 함께 표시합니다.",
+      text: "Kakao 교통정보, 서울 TOPIS 돌발정보와 바로잡길 데모 집계를 표시합니다.",
     };
   }
 
@@ -85,7 +85,9 @@ export function LayerSelector({ selection, onChange }: LayerSelectorProps) {
                 aria-hidden="true"
               >
                 {layer.status === "LIVE"
-                  ? "실제"
+                  ? layer.id === "INCIDENT"
+                    ? "실시간"
+                    : "실제"
                   : layer.status === "DEMO"
                     ? "DEMO"
                     : "준비"}

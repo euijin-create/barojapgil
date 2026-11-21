@@ -1,7 +1,7 @@
 # 바로잡길 MVP 아키텍처
 
 - 문서 상태: 현재 MVP 구현 및 확장 설계
-- 최종 갱신: 2026-11-14
+- 최종 갱신: 2026-11-21
 
 ## 1. 설계 목표
 
@@ -704,20 +704,39 @@ RiskMapView
 ├─ LayerSelector
 ├─ KakaoMapSdk              # script 중복 방지, timeout과 load 오류
 ├─ KakaoTrafficMap          # 지도 생명주기와 Kakao overlay adapter
+├─ useTrafficIncidents      # 내부 API의 LOADING/SUCCESS/EMPTY/ERROR 상태
+├─ IncidentDetailCard       # 정규화된 TOPIS 돌발정보 상세
 ├─ demo aggregate areas     # 합성 구역 중심·반경, 실제 사건 아님
 └─ RiskAreaDetailCard       # 공개 가능한 구역 요약만 표시
 ```
 
-레이어 계약은 `TRAFFIC | ACCIDENT_HOTSPOT | INCIDENT | BAROJAPGIL_REPORT`로 분리한다. `종합`은 별도 데이터 레이어가 아니라 현재 사용 가능한 `TRAFFIC`과 `BAROJAPGIL_REPORT`를 함께 켜는 UI preset이다.
+레이어 계약은 `TRAFFIC | ACCIDENT_HOTSPOT | INCIDENT | BAROJAPGIL_REPORT`로 분리한다. `종합`은 별도 데이터 레이어가 아니라 현재 사용 가능한 `TRAFFIC`, `INCIDENT`, `BAROJAPGIL_REPORT`를 함께 켜는 UI preset이다.
 
 - `TRAFFIC`: Kakao Maps의 `MapTypeId.TRAFFIC` 실제 오버레이. 선택에 따라 `addOverlayMapTypeId`/`removeOverlayMapTypeId`로 전환한다.
 - `ACCIDENT_HOTSPOT`: 향후 도로교통공단 TAAS adapter가 채울 준비 중 레이어다.
-- `INCIDENT`: 향후 서울 TOPIS 사고·공사·통제 adapter가 채울 준비 중 레이어다.
+- `INCIDENT`: 서버 전용 서울 `AccInfo` adapter가 제공하는 TOPIS 사고·공사·통제 실시간 레이어다.
 - `BAROJAPGIL_REPORT`: 실제 DB 연결 전까지 DEMO 합성 집계구역만 표시한다.
 
 `window.kakao` 접근, 지도와 overlay 생성은 Client Component effect 안에서만 수행한다. 키 누락, SDK 네트워크 오류, 허용 도메인 오류 또는 초기화 예외는 지도 영역의 명시적 오류 상태로 수렴시키며 다른 앱 화면과 AI 분석 경계에는 전파하지 않는다.
 
-### 14.2 비식별 집계 데이터 흐름
+### 14.2 서울 TOPIS 돌발정보 경계
+
+브라우저는 서울 Open API를 직접 호출하지 않고 다음 내부 경계를 사용한다.
+
+```text
+GET /api/traffic/incidents
+→ seoul-incident-client          # 서버 전용 키, AccInfo 1~300건, 180초 캐시
+→ seoul-incident-parser          # fast-xml-parser, RESULT 코드 검증
+→ coordinate-transform          # EPSG:5181 → EPSG:4326
+→ TrafficIncident[]             # UI에 필요한 정규화 데이터만 반환
+→ KakaoTrafficMap INCIDENT overlay
+```
+
+`SEOUL_OPEN_DATA_API_KEY`는 `server-only` 모듈에서만 읽는다. 요청 URL 전체에는 키가 포함되므로 로그에 남기지 않으며 원본 XML과 서울 API 원문 오류도 브라우저로 전달하지 않는다. `INFO-200`은 정상 빈 배열로, 인증·형식·상위 서비스 오류는 정제된 내부 오류로 변환한다.
+
+AccInfo의 `GRS80TM_X/Y`는 공개 sample 좌표 범위와 GRS80 중부원점 정의에 맞춰 `EPSG:5181(KGD2002 / Central Belt)`로 해석한다. `proj4`로 WGS84(`EPSG:4326`)에 변환한 뒤 서울 범위(`lat 37.4~37.8`, `lng 126.7~127.3`) 밖 좌표는 마커에서 제외하고 민감값 없이 제외 건수만 경고한다.
+
+### 14.3 비식별 집계 데이터 흐름
 
 데이터 흐름:
 
@@ -736,6 +755,7 @@ RiskMapView
 - 사용자 case, 분석 결과, 원본·파생 미디어 응답은 기본적으로 private/no-store다.
 - 사용자별 데이터에 정적 공개 캐시를 적용하지 않는다.
 - 공개 집계 지도만 정책 버전과 갱신 주기에 맞춰 캐시할 수 있다.
+- 서울 TOPIS 원본 조회는 Next.js 서버 fetch cache를 180초 적용하고, 정상 내부 API 응답도 같은 `s-maxage`와 짧은 stale-while-revalidate를 사용한다. 오류 응답은 `no-store`다.
 - URL과 query string에 차량번호, 정밀 좌표, 미디어 path를 넣지 않는다.
 - Client Component에는 화면에 필요한 최소 직렬화 DTO만 전달한다.
 - 서버 전용 모듈은 `server-only` 경계를 사용해 Client bundle 유입을 빌드 단계에서 막는다.

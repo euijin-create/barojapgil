@@ -3,6 +3,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { useDemo } from "@/features/demo/demo-context";
 import { DEMO_RISK_AGGREGATE_AREAS } from "./risk-map/demo-risk-map-data";
+import { IncidentDetailCard } from "./risk-map/incident-detail-card";
+import { IncidentLayerStatus } from "./risk-map/incident-layer-status";
 import { KakaoTrafficMap } from "./risk-map/kakao-traffic-map";
 import { LayerSelector } from "./risk-map/layer-selector";
 import { RiskAreaDetailCard } from "./risk-map/risk-area-detail-card";
@@ -11,6 +13,7 @@ import {
   selectionIncludesLayer,
   type MapLayerSelection,
 } from "./risk-map/types";
+import { useTrafficIncidents } from "./risk-map/use-traffic-incidents";
 
 interface RiskMapViewProps {
   kakaoMapKey: string;
@@ -25,13 +28,19 @@ const sourceStatusClassName = {
 export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
   const [selection, setSelection] = useState<MapLayerSelection>("ALL");
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(
+    null,
+  );
   const { riskConsent, setRiskConsent } = useDemo();
+  const { state: incidentState, retry: retryIncidents } =
+    useTrafficIncidents();
 
   const showTraffic = selectionIncludesLayer(selection, "TRAFFIC");
   const showReportAreas = selectionIncludesLayer(
     selection,
     "BAROJAPGIL_REPORT",
   );
+  const showIncidents = selectionIncludesLayer(selection, "INCIDENT");
   const selectedArea = useMemo(
     () =>
       showReportAreas
@@ -41,15 +50,33 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
         : null,
     [selectedAreaId, showReportAreas],
   );
+  const selectedIncident = useMemo(
+    () =>
+      showIncidents
+        ? (incidentState.incidents.find(
+            (incident) => incident.id === selectedIncidentId,
+          ) ?? null)
+        : null,
+    [incidentState.incidents, selectedIncidentId, showIncidents],
+  );
 
   const selectArea = useCallback((areaId: string) => {
     setSelectedAreaId(areaId);
+    setSelectedIncidentId(null);
+  }, []);
+
+  const selectIncident = useCallback((incidentId: string) => {
+    setSelectedIncidentId(incidentId);
+    setSelectedAreaId(null);
   }, []);
 
   function selectLayer(nextSelection: MapLayerSelection) {
     setSelection(nextSelection);
     if (!selectionIncludesLayer(nextSelection, "BAROJAPGIL_REPORT")) {
       setSelectedAreaId(null);
+    }
+    if (!selectionIncludesLayer(nextSelection, "INCIDENT")) {
+      setSelectedIncidentId(null);
     }
   }
 
@@ -70,10 +97,15 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
               서울 교통안전 지도
             </h2>
           </div>
-          <div className="flex items-center gap-1.5 text-[10px] font-extrabold">
+          <div className="flex flex-wrap items-center justify-end gap-1.5 text-[10px] font-extrabold">
             {showTraffic ? (
               <span className="rounded-full bg-[#e7f8f3] px-2 py-1 text-[#168f73]">
                 교통 실제
+              </span>
+            ) : null}
+            {showIncidents ? (
+              <span className="rounded-full bg-[#edf6ff] px-2 py-1 text-[#2569bc]">
+                돌발 실시간
               </span>
             ) : null}
             {showReportAreas ? (
@@ -88,19 +120,31 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
           appKey={kakaoMapKey}
           showTraffic={showTraffic}
           showReportAreas={showReportAreas}
+          showIncidents={showIncidents}
           areas={DEMO_RISK_AGGREGATE_AREAS}
+          incidents={incidentState.incidents}
           selectedAreaId={selectedAreaId}
+          selectedIncidentId={selectedIncidentId}
           onSelectArea={selectArea}
+          onSelectIncident={selectIncident}
         />
 
-        {showReportAreas && !selectedArea ? (
+        <IncidentLayerStatus
+          state={incidentState}
+          visible={showIncidents}
+          onRetry={retryIncidents}
+        />
+
+        {selection === "BAROJAPGIL_REPORT" && !selectedArea ? (
           <p className="text-center text-xs font-semibold text-[var(--ink-muted)]">
             DEMO 집계구역을 선택하면 요약을 확인할 수 있어요.
           </p>
         ) : null}
       </section>
 
-      {selectedArea ? (
+      {selectedIncident ? (
+        <IncidentDetailCard incident={selectedIncident} />
+      ) : selectedArea ? (
         <RiskAreaDetailCard
           area={selectedArea}
           isTrafficVisible={showTraffic}
@@ -134,13 +178,14 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
               <span
                 className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${sourceStatusClassName[layer.status]}`}
               >
-                {layer.status === "LIVE"
-                  ? "실제 데이터"
-                  : layer.statusLabel}
+                {layer.statusLabel}
               </span>
             </li>
           ))}
         </ul>
+        <p className="mt-3 border-t border-[#e7edf3] pt-3 text-[11px] font-semibold leading-5 text-[#6b839a]">
+          출처: 서울특별시 TOPIS / 서울 열린데이터광장
+        </p>
       </section>
 
       <section className="rounded-2xl border border-[#ccecdf] bg-[#e7f8f3] p-4">

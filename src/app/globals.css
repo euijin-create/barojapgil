@@ -605,6 +605,49 @@ a {
   line-height: 1;
 }
 
+.risk-map-incident-marker {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.96);
+  border-radius: 10px;
+  color: #ffffff;
+  background: #45657f;
+  box-shadow: 0 3px 10px rgba(18, 48, 74, 0.24);
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1;
+  transform-origin: center;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.risk-map-incident-marker[data-kind="ACCIDENT"] {
+  background: #d95f54;
+}
+
+.risk-map-incident-marker[data-kind="CONSTRUCTION"] {
+  background: #dc8615;
+}
+
+.risk-map-incident-marker[data-kind="CONTROL"],
+.risk-map-incident-marker[data-kind="EVENT"] {
+  background: #2f80ed;
+}
+
+.risk-map-incident-marker:hover,
+.risk-map-incident-marker:focus-visible,
+.risk-map-incident-marker.is-selected {
+  z-index: 1;
+  transform: scale(1.12);
+  box-shadow: 0 4px 14px rgba(18, 48, 74, 0.34);
+}
+
+.risk-map-incident-marker.is-selected {
+  outline: 3px solid rgba(18, 48, 74, 0.72);
+  outline-offset: 2px;
+}
+
 @media (min-width: 640px) {
   /* 데스크톱에서도 모바일 앱 폭과 한 열 흐름을 유지한다. */
   .app-shell .sm\:grid-cols-3 {

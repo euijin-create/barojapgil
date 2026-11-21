@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { TrafficIncident } from "@/contracts/traffic-incidents";
 import {
   KakaoMapSdk,
   type KakaoSdkErrorCode,
@@ -11,15 +12,25 @@ interface KakaoTrafficMapProps {
   appKey: string;
   showTraffic: boolean;
   showReportAreas: boolean;
+  showIncidents: boolean;
   areas: readonly DemoRiskAggregateArea[];
+  incidents: readonly TrafficIncident[];
   selectedAreaId: string | null;
+  selectedIncidentId: string | null;
   onSelectArea: (areaId: string) => void;
+  onSelectIncident: (incidentId: string) => void;
 }
 
 interface ReportOverlayRecord {
   circle: KakaoCircleInstance;
   overlay: KakaoCustomOverlayInstance;
   circleClickHandler: () => void;
+  markerButton: HTMLButtonElement;
+  markerClickHandler: (event: MouseEvent) => void;
+}
+
+interface IncidentOverlayRecord {
+  overlay: KakaoCustomOverlayInstance;
   markerButton: HTMLButtonElement;
   markerClickHandler: (event: MouseEvent) => void;
 }
@@ -61,18 +72,39 @@ function createAggregateMarker(
   return button;
 }
 
+function createIncidentMarker(
+  incident: TrafficIncident,
+  isSelected: boolean,
+) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `risk-map-incident-marker${isSelected ? " is-selected" : ""}`;
+  button.dataset.kind = incident.categoryKind;
+  button.setAttribute(
+    "aria-label",
+    `${incident.category}, 서울 TOPIS 실시간 돌발정보`,
+  );
+  button.textContent = "!";
+  return button;
+}
+
 export function KakaoTrafficMap({
   appKey,
   showTraffic,
   showReportAreas,
+  showIncidents,
   areas,
+  incidents,
   selectedAreaId,
+  selectedIncidentId,
   onSelectArea,
+  onSelectIncident,
 }: KakaoTrafficMapProps) {
   const mapElementRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<KakaoMapInstance | null>(null);
   const mapsRef = useRef<KakaoMapsNamespace | null>(null);
   const overlayRecordsRef = useRef<ReportOverlayRecord[]>([]);
+  const incidentOverlayRecordsRef = useRef<IncidentOverlayRecord[]>([]);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [trafficError, setTrafficError] = useState(false);
@@ -95,6 +127,17 @@ export function KakaoTrafficMap({
       record.overlay.setMap(null);
     }
     overlayRecordsRef.current = [];
+  }, []);
+
+  const clearIncidentOverlays = useCallback(() => {
+    for (const record of incidentOverlayRecordsRef.current) {
+      record.markerButton.removeEventListener(
+        "click",
+        record.markerClickHandler,
+      );
+      record.overlay.setMap(null);
+    }
+    incidentOverlayRecordsRef.current = [];
   }, []);
 
   const initializeMap = useCallback((maps: KakaoMapsNamespace) => {
@@ -234,6 +277,56 @@ export function KakaoTrafficMap({
   ]);
 
   useEffect(() => {
+    clearIncidentOverlays();
+    if (
+      !mapReady ||
+      !showIncidents ||
+      !mapInstanceRef.current ||
+      !mapsRef.current
+    ) {
+      return;
+    }
+
+    const map = mapInstanceRef.current;
+    const maps = mapsRef.current;
+
+    incidentOverlayRecordsRef.current = incidents.map((incident) => {
+      const position = new maps.LatLng(
+        incident.latitude,
+        incident.longitude,
+      );
+      const isSelected = incident.id === selectedIncidentId;
+      const markerButton = createIncidentMarker(incident, isSelected);
+      const markerClickHandler = (event: MouseEvent) => {
+        event.stopPropagation();
+        onSelectIncident(incident.id);
+      };
+      markerButton.addEventListener("click", markerClickHandler);
+
+      const overlay = new maps.CustomOverlay({
+        map,
+        position,
+        content: markerButton,
+        xAnchor: 0.5,
+        yAnchor: 0.5,
+        zIndex: isSelected ? 6 : 5,
+        clickable: true,
+      });
+
+      return { overlay, markerButton, markerClickHandler };
+    });
+
+    return clearIncidentOverlays;
+  }, [
+    clearIncidentOverlays,
+    incidents,
+    mapReady,
+    onSelectIncident,
+    selectedIncidentId,
+    showIncidents,
+  ]);
+
+  useEffect(() => {
     if (!mapReady || !mapElementRef.current || !mapInstanceRef.current) return;
     if (typeof ResizeObserver === "undefined") return;
 
@@ -246,6 +339,7 @@ export function KakaoTrafficMap({
   useEffect(() => {
     return () => {
       clearReportOverlays();
+      clearIncidentOverlays();
       const map = mapInstanceRef.current;
       const maps = mapsRef.current;
       if (map && maps) {
@@ -258,7 +352,7 @@ export function KakaoTrafficMap({
       mapInstanceRef.current = null;
       mapsRef.current = null;
     };
-  }, [clearReportOverlays]);
+  }, [clearIncidentOverlays, clearReportOverlays]);
 
   const normalizedAppKey = appKey.trim();
   const configurationMissing = normalizedAppKey.length === 0;

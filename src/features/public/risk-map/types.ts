@@ -43,7 +43,7 @@ export const MAP_LAYER_DEFINITIONS: readonly MapLayerDefinition[] = [
     id: "TRAFFIC",
     label: "실시간 교통",
     status: "LIVE",
-    statusLabel: "실제 연결",
+    statusLabel: "실제 데이터",
     source: "Kakao Maps",
     description: "Kakao Maps의 실시간 교통정보를 표시합니다.",
   },
@@ -58,10 +58,10 @@ export const MAP_LAYER_DEFINITIONS: readonly MapLayerDefinition[] = [
   {
     id: "INCIDENT",
     label: "돌발상황",
-    status: "COMING_SOON",
-    statusLabel: "준비 중",
-    source: "향후 서울 TOPIS",
-    description: "TOPIS 사고·공사·통제 정보를 연결할 예정입니다.",
+    status: "LIVE",
+    statusLabel: "실시간 데이터",
+    source: "서울 TOPIS · 서울 열린데이터광장",
+    description: "서울 TOPIS의 실시간 사고·공사·통제 정보를 표시합니다.",
   },
   {
     id: "BAROJAPGIL_REPORT",
@@ -82,7 +82,11 @@ export function selectionIncludesLayer(
   layer: MapLayer,
 ) {
   if (selection === "ALL") {
-    return layer === "TRAFFIC" || layer === "BAROJAPGIL_REPORT";
+    return (
+      layer === "TRAFFIC" ||
+      layer === "INCIDENT" ||
+      layer === "BAROJAPGIL_REPORT"
+    );
   }
 
   return selection === layer;
