@@ -24,8 +24,21 @@ declare global {
     setMap(map: KakaoMapInstance | null): void;
   }
 
+  interface KakaoPolygonInstance {
+    setMap(map: KakaoMapInstance | null): void;
+    setOptions(options: {
+      strokeWeight?: number;
+      strokeColor?: string;
+      strokeOpacity?: number;
+      strokeStyle?: string;
+      fillColor?: string;
+      fillOpacity?: number;
+    }): void;
+  }
+
   interface KakaoCustomOverlayInstance {
     setMap(map: KakaoMapInstance | null): void;
+    setZIndex(zIndex: number): void;
   }
 
   interface KakaoZoomControl {
@@ -55,6 +68,17 @@ declare global {
       fillOpacity?: number;
       clickable?: boolean;
     }) => KakaoCircleInstance;
+    Polygon: new (options: {
+      map?: KakaoMapInstance;
+      path: KakaoLatLng[] | KakaoLatLng[][];
+      strokeWeight?: number;
+      strokeColor?: string;
+      strokeOpacity?: number;
+      strokeStyle?: string;
+      fillColor?: string;
+      fillOpacity?: number;
+      clickable?: boolean;
+    }) => KakaoPolygonInstance;
     CustomOverlay: new (options: {
       map?: KakaoMapInstance;
       position: KakaoLatLng;
@@ -73,12 +97,12 @@ declare global {
     };
     event: {
       addListener(
-        target: KakaoCircleInstance,
+        target: KakaoCircleInstance | KakaoPolygonInstance,
         type: string,
         handler: () => void,
       ): void;
       removeListener(
-        target: KakaoCircleInstance,
+        target: KakaoCircleInstance | KakaoPolygonInstance,
         type: string,
         handler: () => void,
       ): void;

@@ -706,14 +706,16 @@ RiskMapView
 ├─ KakaoTrafficMap          # 지도 생명주기와 Kakao overlay adapter
 ├─ useTrafficIncidents      # 내부 API의 LOADING/SUCCESS/EMPTY/ERROR 상태
 ├─ IncidentDetailCard       # 정규화된 TOPIS 돌발정보 상세
+├─ useAccidentHotspots      # 내부 API의 LOADING/SUCCESS/EMPTY/PARTIAL/ERROR 상태
+├─ AccidentHotspotDetailCard # 정규화된 TAAS 사고다발지역 상세
 ├─ demo aggregate areas     # 합성 구역 중심·반경, 실제 사건 아님
 └─ RiskAreaDetailCard       # 공개 가능한 구역 요약만 표시
 ```
 
-레이어 계약은 `TRAFFIC | ACCIDENT_HOTSPOT | INCIDENT | BAROJAPGIL_REPORT`로 분리한다. `종합`은 별도 데이터 레이어가 아니라 현재 사용 가능한 `TRAFFIC`, `INCIDENT`, `BAROJAPGIL_REPORT`를 함께 켜는 UI preset이다.
+레이어 계약은 `TRAFFIC | ACCIDENT_HOTSPOT | INCIDENT | BAROJAPGIL_REPORT`로 분리한다. `종합`은 별도 데이터 레이어가 아니라 현재 사용 가능한 네 레이어를 함께 켜는 UI preset이다.
 
 - `TRAFFIC`: Kakao Maps의 `MapTypeId.TRAFFIC` 실제 오버레이. 선택에 따라 `addOverlayMapTypeId`/`removeOverlayMapTypeId`로 전환한다.
-- `ACCIDENT_HOTSPOT`: 향후 도로교통공단 TAAS adapter가 채울 준비 중 레이어다.
+- `ACCIDENT_HOTSPOT`: 서버 전용 한국도로교통공단 TAAS adapter가 제공하는 과거 통계 기반 공식 사고다발지역 레이어다.
 - `INCIDENT`: 서버 전용 서울 `AccInfo` adapter가 제공하는 TOPIS 사고·공사·통제 실시간 레이어다.
 - `BAROJAPGIL_REPORT`: 실제 DB 연결 전까지 DEMO 합성 집계구역만 표시한다.
 
@@ -736,7 +738,23 @@ GET /api/traffic/incidents
 
 AccInfo의 `GRS80TM_X/Y`는 공개 sample 좌표 범위와 GRS80 중부원점 정의에 맞춰 `EPSG:5181(KGD2002 / Central Belt)`로 해석한다. `proj4`로 WGS84(`EPSG:4326`)에 변환한 뒤 서울 범위(`lat 37.4~37.8`, `lng 126.7~127.3`) 밖 좌표는 마커에서 제외하고 민감값 없이 제외 건수만 경고한다.
 
-### 14.3 비식별 집계 데이터 흐름
+### 14.3 한국도로교통공단 TAAS 사고다발지역 경계
+
+브라우저는 공공데이터포털을 직접 호출하지 않고 다음 내부 경계를 사용한다.
+
+```text
+GET /api/traffic/hotspots
+→ taas-hotspot-client            # 서버 전용 키, 서울 25개 구 제한 동시 조회
+→ taas-hotspot-parser            # 응답 코드·페이지·좌표·GeoJSON 검증
+→ AccidentHotspot[]              # UI에 필요한 정규화 데이터만 반환
+→ KakaoTrafficMap ACCIDENT_HOTSPOT polygon/marker overlay
+```
+
+`TAAS_API_KEY`는 `server-only` 모듈에서만 읽고 `URLSearchParams`로 한 번만 인코딩한다. 요청 URL, 인증키와 원본 응답은 로그나 브라우저 응답에 남기지 않는다. 자치구별 페이지를 순회하되 동시 요청 수를 제한하고, 일부 구만 실패하면 성공 데이터와 비민감 warning을 함께 반환한다.
+
+TAAS의 `lo_crd`/`la_crd`와 `geom_json`은 WGS84(`EPSG:4326`)로 제공되므로 TOPIS와 달리 좌표 변환을 하지 않는다. 서울 범위 밖 중심점은 제외하고, 잘못된 polygon은 생략하되 유효한 중심 marker는 유지한다. 이 레이어는 실시간 위험 판단이 아닌 기준연도의 과거 교통사고 통계임을 화면에 명시한다.
+
+### 14.4 비식별 집계 데이터 흐름
 
 데이터 흐름:
 
@@ -756,6 +774,7 @@ AccInfo의 `GRS80TM_X/Y`는 공개 sample 좌표 범위와 GRS80 중부원점 �
 - 사용자별 데이터에 정적 공개 캐시를 적용하지 않는다.
 - 공개 집계 지도만 정책 버전과 갱신 주기에 맞춰 캐시할 수 있다.
 - 서울 TOPIS 원본 조회는 Next.js 서버 fetch cache를 180초 적용하고, 정상 내부 API 응답도 같은 `s-maxage`와 짧은 stale-while-revalidate를 사용한다. 오류 응답은 `no-store`다.
+- TAAS 사고다발지역 정상 응답은 12시간 캐시하고, 인증·상위 서비스·전체 조회 실패 응답은 `no-store`로 처리한다.
 - URL과 query string에 차량번호, 정밀 좌표, 미디어 path를 넣지 않는다.
 - Client Component에는 화면에 필요한 최소 직렬화 DTO만 전달한다.
 - 서버 전용 모듈은 `server-only` 경계를 사용해 Client bundle 유입을 빌드 단계에서 막는다.

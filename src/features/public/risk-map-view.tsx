@@ -2,7 +2,9 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useDemo } from "@/features/demo/demo-context";
+import { AccidentHotspotDetailCard } from "./risk-map/accident-hotspot-detail-card";
 import { DEMO_RISK_AGGREGATE_AREAS } from "./risk-map/demo-risk-map-data";
+import { HotspotLayerStatus } from "./risk-map/hotspot-layer-status";
 import { IncidentDetailCard } from "./risk-map/incident-detail-card";
 import { IncidentLayerStatus } from "./risk-map/incident-layer-status";
 import { KakaoTrafficMap } from "./risk-map/kakao-traffic-map";
@@ -13,6 +15,7 @@ import {
   selectionIncludesLayer,
   type MapLayerSelection,
 } from "./risk-map/types";
+import { useAccidentHotspots } from "./risk-map/use-accident-hotspots";
 import { useTrafficIncidents } from "./risk-map/use-traffic-incidents";
 
 interface RiskMapViewProps {
@@ -21,12 +24,16 @@ interface RiskMapViewProps {
 
 const sourceStatusClassName = {
   LIVE: "bg-[#e7f8f3] text-[#168f73]",
+  OFFICIAL: "bg-[#fff4e4] text-[#a45e09]",
   COMING_SOON: "bg-[#edf1f5] text-[#61788e]",
   DEMO: "bg-[#fff4e4] text-[#a45e09]",
 } as const;
 
 export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
   const [selection, setSelection] = useState<MapLayerSelection>("ALL");
+  const [selectedHotspotId, setSelectedHotspotId] = useState<string | null>(
+    null,
+  );
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(
     null,
@@ -34,13 +41,25 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
   const { riskConsent, setRiskConsent } = useDemo();
   const { state: incidentState, retry: retryIncidents } =
     useTrafficIncidents();
+  const { state: hotspotState, retry: retryHotspots } =
+    useAccidentHotspots();
 
   const showTraffic = selectionIncludesLayer(selection, "TRAFFIC");
+  const showHotspots = selectionIncludesLayer(selection, "ACCIDENT_HOTSPOT");
   const showReportAreas = selectionIncludesLayer(
     selection,
     "BAROJAPGIL_REPORT",
   );
   const showIncidents = selectionIncludesLayer(selection, "INCIDENT");
+  const selectedHotspot = useMemo(
+    () =>
+      showHotspots
+        ? (hotspotState.hotspots.find(
+            (hotspot) => hotspot.id === selectedHotspotId,
+          ) ?? null)
+        : null,
+    [hotspotState.hotspots, selectedHotspotId, showHotspots],
+  );
   const selectedArea = useMemo(
     () =>
       showReportAreas
@@ -63,11 +82,19 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
   const selectArea = useCallback((areaId: string) => {
     setSelectedAreaId(areaId);
     setSelectedIncidentId(null);
+    setSelectedHotspotId(null);
   }, []);
 
   const selectIncident = useCallback((incidentId: string) => {
     setSelectedIncidentId(incidentId);
     setSelectedAreaId(null);
+    setSelectedHotspotId(null);
+  }, []);
+
+  const selectHotspot = useCallback((hotspotId: string) => {
+    setSelectedHotspotId(hotspotId);
+    setSelectedAreaId(null);
+    setSelectedIncidentId(null);
   }, []);
 
   function selectLayer(nextSelection: MapLayerSelection) {
@@ -77,6 +104,9 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
     }
     if (!selectionIncludesLayer(nextSelection, "INCIDENT")) {
       setSelectedIncidentId(null);
+    }
+    if (!selectionIncludesLayer(nextSelection, "ACCIDENT_HOTSPOT")) {
+      setSelectedHotspotId(null);
     }
   }
 
@@ -108,6 +138,11 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
                 돌발 실시간
               </span>
             ) : null}
+            {showHotspots ? (
+              <span className="rounded-full bg-[#fff4e4] px-2 py-1 text-[#a45e09]">
+                사고다발 공식
+              </span>
+            ) : null}
             {showReportAreas ? (
               <span className="rounded-full bg-[#fff4e4] px-2 py-1 text-[#a45e09]">
                 신고 DEMO
@@ -119,12 +154,16 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
         <KakaoTrafficMap
           appKey={kakaoMapKey}
           showTraffic={showTraffic}
+          showHotspots={showHotspots}
           showReportAreas={showReportAreas}
           showIncidents={showIncidents}
+          hotspots={hotspotState.hotspots}
           areas={DEMO_RISK_AGGREGATE_AREAS}
           incidents={incidentState.incidents}
+          selectedHotspotId={selectedHotspotId}
           selectedAreaId={selectedAreaId}
           selectedIncidentId={selectedIncidentId}
+          onSelectHotspot={selectHotspot}
           onSelectArea={selectArea}
           onSelectIncident={selectIncident}
         />
@@ -135,6 +174,12 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
           onRetry={retryIncidents}
         />
 
+        <HotspotLayerStatus
+          state={hotspotState}
+          visible={showHotspots}
+          onRetry={retryHotspots}
+        />
+
         {selection === "BAROJAPGIL_REPORT" && !selectedArea ? (
           <p className="text-center text-xs font-semibold text-[var(--ink-muted)]">
             DEMO 집계구역을 선택하면 요약을 확인할 수 있어요.
@@ -142,7 +187,9 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
         ) : null}
       </section>
 
-      {selectedIncident ? (
+      {selectedHotspot ? (
+        <AccidentHotspotDetailCard hotspot={selectedHotspot} />
+      ) : selectedIncident ? (
         <IncidentDetailCard incident={selectedIncident} />
       ) : selectedArea ? (
         <RiskAreaDetailCard
@@ -184,7 +231,12 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
           ))}
         </ul>
         <p className="mt-3 border-t border-[#e7edf3] pt-3 text-[11px] font-semibold leading-5 text-[#6b839a]">
-          출처: 서울특별시 TOPIS / 서울 열린데이터광장
+          출처: 한국도로교통공단 교통사고분석시스템(TAAS) / 공공데이터포털
+          <br />
+          서울특별시 TOPIS / 서울 열린데이터광장
+        </p>
+        <p className="mt-2 text-[11px] font-semibold leading-5 text-[#8a6b42]">
+          사고다발지역은 실시간 정보가 아닌 과거 교통사고 통계입니다.
         </p>
       </section>
 

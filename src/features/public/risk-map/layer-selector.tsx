@@ -11,6 +11,7 @@ interface LayerSelectorProps {
 
 const statusTone = {
   LIVE: "bg-[#e7f8f3] text-[#168f73]",
+  OFFICIAL: "bg-[#fff4e4] text-[#a45e09]",
   COMING_SOON: "bg-[#edf1f5] text-[#61788e]",
   DEMO: "bg-[#fff4e4] text-[#a45e09]",
 } as const;
@@ -18,9 +19,9 @@ const statusTone = {
 function selectionDescription(selection: MapLayerSelection) {
   if (selection === "ALL") {
     return {
-      badge: "실제 + DEMO",
+      badge: "실제 + 공식 + DEMO",
       badgeClassName: "bg-[#edf6ff] text-[#2569bc]",
-      text: "Kakao 교통정보, 서울 TOPIS 돌발정보와 바로잡길 데모 집계를 표시합니다.",
+      text: "Kakao 교통, TAAS 사고다발, TOPIS 돌발과 신고 데모 집계를 함께 표시합니다.",
     };
   }
 
@@ -88,6 +89,8 @@ export function LayerSelector({ selection, onChange }: LayerSelectorProps) {
                   ? layer.id === "INCIDENT"
                     ? "실시간"
                     : "실제"
+                  : layer.status === "OFFICIAL"
+                    ? "TAAS"
                   : layer.status === "DEMO"
                     ? "DEMO"
                     : "준비"}

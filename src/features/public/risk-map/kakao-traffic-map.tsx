@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { AccidentHotspot } from "@/contracts/accident-hotspots";
 import type { TrafficIncident } from "@/contracts/traffic-incidents";
 import {
   KakaoMapSdk,
@@ -11,14 +12,27 @@ import type { DemoRiskAggregateArea } from "./types";
 interface KakaoTrafficMapProps {
   appKey: string;
   showTraffic: boolean;
+  showHotspots: boolean;
   showReportAreas: boolean;
   showIncidents: boolean;
+  hotspots: readonly AccidentHotspot[];
   areas: readonly DemoRiskAggregateArea[];
   incidents: readonly TrafficIncident[];
+  selectedHotspotId: string | null;
   selectedAreaId: string | null;
   selectedIncidentId: string | null;
+  onSelectHotspot: (hotspotId: string) => void;
   onSelectArea: (areaId: string) => void;
   onSelectIncident: (incidentId: string) => void;
+}
+
+interface HotspotOverlayRecord {
+  hotspotId: string;
+  polygon: KakaoPolygonInstance | null;
+  overlay: KakaoCustomOverlayInstance;
+  polygonClickHandler: (() => void) | null;
+  markerButton: HTMLButtonElement;
+  markerClickHandler: (event: MouseEvent) => void;
 }
 
 interface ReportOverlayRecord {
@@ -72,6 +86,17 @@ function createAggregateMarker(
   return button;
 }
 
+function createHotspotMarker(hotspot: AccidentHotspot) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "risk-map-hotspot-marker";
+  button.setAttribute(
+    "aria-label",
+    `${hotspot.name}, 한국도로교통공단 TAAS 공식 사고다발지역, 사고 ${hotspot.occurrenceCount}건`,
+  );
+  return button;
+}
+
 function createIncidentMarker(
   incident: TrafficIncident,
   isSelected: boolean,
@@ -91,23 +116,48 @@ function createIncidentMarker(
 export function KakaoTrafficMap({
   appKey,
   showTraffic,
+  showHotspots,
   showReportAreas,
   showIncidents,
+  hotspots,
   areas,
   incidents,
+  selectedHotspotId,
   selectedAreaId,
   selectedIncidentId,
+  onSelectHotspot,
   onSelectArea,
   onSelectIncident,
 }: KakaoTrafficMapProps) {
   const mapElementRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<KakaoMapInstance | null>(null);
   const mapsRef = useRef<KakaoMapsNamespace | null>(null);
+  const hotspotOverlayRecordsRef = useRef<HotspotOverlayRecord[]>([]);
   const overlayRecordsRef = useRef<ReportOverlayRecord[]>([]);
   const incidentOverlayRecordsRef = useRef<IncidentOverlayRecord[]>([]);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [trafficError, setTrafficError] = useState(false);
+
+  const clearHotspotOverlays = useCallback(() => {
+    const maps = mapsRef.current;
+    for (const record of hotspotOverlayRecordsRef.current) {
+      if (maps && record.polygon && record.polygonClickHandler) {
+        maps.event.removeListener(
+          record.polygon,
+          "click",
+          record.polygonClickHandler,
+        );
+      }
+      record.markerButton.removeEventListener(
+        "click",
+        record.markerClickHandler,
+      );
+      record.polygon?.setMap(null);
+      record.overlay.setMap(null);
+    }
+    hotspotOverlayRecordsRef.current = [];
+  }, []);
 
   const clearReportOverlays = useCallback(() => {
     const maps = mapsRef.current;
@@ -203,6 +253,98 @@ export function KakaoTrafficMap({
       }
     };
   }, [mapReady, showTraffic]);
+
+  useEffect(() => {
+    clearHotspotOverlays();
+    if (
+      !mapReady ||
+      !showHotspots ||
+      !mapInstanceRef.current ||
+      !mapsRef.current
+    ) {
+      return;
+    }
+
+    const map = mapInstanceRef.current;
+    const maps = mapsRef.current;
+
+    hotspotOverlayRecordsRef.current = hotspots.map((hotspot) => {
+      const center = new maps.LatLng(hotspot.latitude, hotspot.longitude);
+      const path = hotspot.polygon.map(
+        (point) => new maps.LatLng(point.latitude, point.longitude),
+      );
+      const polygon =
+        path.length >= 3
+          ? new maps.Polygon({
+              map,
+              path,
+              strokeWeight: 2,
+              strokeColor: "#c56b18",
+              strokeOpacity: 0.72,
+              strokeStyle: "solid",
+              fillColor: "#f39a1e",
+              fillOpacity: 0.09,
+              clickable: true,
+            })
+          : null;
+
+      const polygonClickHandler = polygon
+        ? () => onSelectHotspot(hotspot.id)
+        : null;
+      if (polygon && polygonClickHandler) {
+        maps.event.addListener(polygon, "click", polygonClickHandler);
+      }
+
+      const markerButton = createHotspotMarker(hotspot);
+      const markerClickHandler = (event: MouseEvent) => {
+        event.stopPropagation();
+        onSelectHotspot(hotspot.id);
+      };
+      markerButton.addEventListener("click", markerClickHandler);
+
+      const overlay = new maps.CustomOverlay({
+        map,
+        position: center,
+        content: markerButton,
+        xAnchor: 0.5,
+        yAnchor: 0.5,
+        zIndex: 2,
+        clickable: true,
+      });
+
+      return {
+        hotspotId: hotspot.id,
+        polygon,
+        overlay,
+        polygonClickHandler,
+        markerButton,
+        markerClickHandler,
+      };
+    });
+
+    return clearHotspotOverlays;
+  }, [
+    clearHotspotOverlays,
+    hotspots,
+    mapReady,
+    onSelectHotspot,
+    showHotspots,
+  ]);
+
+  useEffect(() => {
+    for (const record of hotspotOverlayRecordsRef.current) {
+      const isSelected = record.hotspotId === selectedHotspotId;
+      record.markerButton.classList.toggle("is-selected", isSelected);
+      record.overlay.setZIndex(isSelected ? 7 : 2);
+      record.polygon?.setOptions({
+        strokeWeight: isSelected ? 3 : 2,
+        strokeColor: isSelected ? "#b64c44" : "#c56b18",
+        strokeOpacity: isSelected ? 0.94 : 0.72,
+        fillColor: isSelected ? "#d95f54" : "#f39a1e",
+        fillOpacity: isSelected ? 0.18 : 0.09,
+      });
+    }
+  }, [hotspots, mapReady, selectedHotspotId, showHotspots]);
 
   useEffect(() => {
     clearReportOverlays();
@@ -338,6 +480,7 @@ export function KakaoTrafficMap({
 
   useEffect(() => {
     return () => {
+      clearHotspotOverlays();
       clearReportOverlays();
       clearIncidentOverlays();
       const map = mapInstanceRef.current;
@@ -352,7 +495,7 @@ export function KakaoTrafficMap({
       mapInstanceRef.current = null;
       mapsRef.current = null;
     };
-  }, [clearIncidentOverlays, clearReportOverlays]);
+  }, [clearHotspotOverlays, clearIncidentOverlays, clearReportOverlays]);
 
   const normalizedAppKey = appKey.trim();
   const configurationMissing = normalizedAppKey.length === 0;

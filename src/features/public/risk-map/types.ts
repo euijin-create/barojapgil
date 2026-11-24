@@ -7,7 +7,7 @@ export type MapLayer =
   | "BAROJAPGIL_REPORT";
 
 export type MapLayerSelection = "ALL" | MapLayer;
-export type MapDataStatus = "LIVE" | "COMING_SOON" | "DEMO";
+export type MapDataStatus = "LIVE" | "OFFICIAL" | "COMING_SOON" | "DEMO";
 
 export interface MapLayerDefinition {
   id: MapLayer;
@@ -50,10 +50,10 @@ export const MAP_LAYER_DEFINITIONS: readonly MapLayerDefinition[] = [
   {
     id: "ACCIDENT_HOTSPOT",
     label: "사고다발",
-    status: "COMING_SOON",
-    statusLabel: "준비 중",
-    source: "향후 도로교통공단 TAAS",
-    description: "TAAS 사고다발 데이터를 연결할 예정입니다.",
+    status: "OFFICIAL",
+    statusLabel: "공식 데이터",
+    source: "한국도로교통공단 TAAS",
+    description: "과거 교통사고 통계로 선정된 법규위반 사고다발지역입니다.",
   },
   {
     id: "INCIDENT",
@@ -84,6 +84,7 @@ export function selectionIncludesLayer(
   if (selection === "ALL") {
     return (
       layer === "TRAFFIC" ||
+      layer === "ACCIDENT_HOTSPOT" ||
       layer === "INCIDENT" ||
       layer === "BAROJAPGIL_REPORT"
     );

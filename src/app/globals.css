@@ -605,6 +605,41 @@ a {
   line-height: 1;
 }
 
+.risk-map-hotspot-marker {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 2px solid #c56b18;
+  border-radius: 50%;
+  background: rgba(255, 250, 241, 0.97);
+  box-shadow: 0 2px 7px rgba(118, 70, 16, 0.22);
+  transform-origin: center;
+  transition: transform 150ms ease, box-shadow 150ms ease,
+    border-color 150ms ease;
+}
+
+.risk-map-hotspot-marker::after {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d47718;
+  content: "";
+}
+
+.risk-map-hotspot-marker:hover,
+.risk-map-hotspot-marker:focus-visible,
+.risk-map-hotspot-marker.is-selected {
+  border-color: #b64c44;
+  transform: scale(1.12);
+  box-shadow: 0 4px 14px rgba(103, 47, 34, 0.3);
+}
+
+.risk-map-hotspot-marker.is-selected {
+  outline: 3px solid rgba(182, 76, 68, 0.45);
+  outline-offset: 2px;
+}
+
 .risk-map-incident-marker {
   display: grid;
   width: 32px;
