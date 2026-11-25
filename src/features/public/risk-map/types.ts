@@ -45,7 +45,7 @@ export const MAP_LAYER_DEFINITIONS: readonly MapLayerDefinition[] = [
     status: "LIVE",
     statusLabel: "실제 데이터",
     source: "Kakao Maps",
-    description: "Kakao Maps의 실시간 교통정보를 표시합니다.",
+    description: "Kakao의 실시간 교통 흐름을 보여줘요.",
   },
   {
     id: "ACCIDENT_HOTSPOT",
@@ -53,7 +53,7 @@ export const MAP_LAYER_DEFINITIONS: readonly MapLayerDefinition[] = [
     status: "OFFICIAL",
     statusLabel: "공식 데이터",
     source: "한국도로교통공단 TAAS",
-    description: "과거 교통사고 통계로 선정된 법규위반 사고다발지역입니다.",
+    description: "과거 사고 통계로 선정된 사고다발지역이에요.",
   },
   {
     id: "INCIDENT",
@@ -61,7 +61,7 @@ export const MAP_LAYER_DEFINITIONS: readonly MapLayerDefinition[] = [
     status: "LIVE",
     statusLabel: "실시간 데이터",
     source: "서울 TOPIS · 서울 열린데이터광장",
-    description: "서울 TOPIS의 실시간 사고·공사·통제 정보를 표시합니다.",
+    description: "서울의 사고·공사·통제 정보를 실시간으로 보여줘요.",
   },
   {
     id: "BAROJAPGIL_REPORT",
@@ -69,7 +69,7 @@ export const MAP_LAYER_DEFINITIONS: readonly MapLayerDefinition[] = [
     status: "DEMO",
     statusLabel: "DEMO",
     source: "향후 비식별 신고 집계 DB",
-    description: "현재는 합성한 구역 단위 신고 집계 예시입니다.",
+    description: "구역 단위 신고 집계 예시를 보여줘요.",
   },
 ] as const;
 

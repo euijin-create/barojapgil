@@ -1,20 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --primary: #2f80ed;
-  --primary-dark: #246fce;
-  --primary-soft: #edf6ff;
-  --navy: #12304a;
-  --ink: #18364f;
-  --ink-muted: #7890a8;
-  --mint: #26b894;
-  --mint-dark: #168f73;
-  --mint-soft: #e7f8f3;
-  --orange: #f39a1e;
-  --orange-soft: #fff4e4;
-  --line: #dce7f1;
+  --primary: #0969f5;
+  --primary-dark: #0759d2;
+  --primary-soft: #edf5ff;
+  --navy: #0b2d4b;
+  --ink: #173650;
+  --ink-muted: #667f96;
+  --mint: #1da981;
+  --mint-dark: #137b61;
+  --mint-soft: #e9f8f3;
+  --orange: #ed8b18;
+  --orange-soft: #fff5e7;
+  --error: #d84747;
+  --error-soft: #fff0f0;
+  --line: #dce6ef;
   --surface: #ffffff;
-  --background: #eef3f8;
+  --background: #f8fafc;
 }
 
 @theme inline {
@@ -31,6 +33,7 @@
 }
 
 html {
+  -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;
 }
 
@@ -41,6 +44,7 @@ body {
   color: var(--ink);
   font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -69,12 +73,12 @@ a {
 }
 
 :focus-visible {
-  outline: 3px solid rgba(47, 128, 237, 0.5);
+  outline: 3px solid rgba(9, 105, 245, 0.38);
   outline-offset: 3px;
 }
 
 .app-shell {
-  width: min(100%, 440px);
+  width: min(100%, 460px);
   min-height: 100vh;
   min-height: 100svh;
   margin-inline: auto;
@@ -144,32 +148,15 @@ a {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
-  gap: 8px;
-  padding-inline: 4px;
+  padding: 4px 5px;
   border-radius: 10px;
   color: var(--navy);
 }
 
-.app-header__brand-mark {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  flex: none;
-  place-items: center;
-  border-radius: 9px;
-  color: #ffffff;
-  background: var(--primary);
-}
-
-.app-header__brand-icon {
-  width: 24px;
-  height: 24px;
-}
-
-.app-header__brand-name {
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.045em;
+.app-header__brand-logo {
+  display: block;
+  width: 106px;
+  height: auto;
 }
 
 .app-header__menu {
@@ -269,29 +256,29 @@ a {
 .app-main {
   min-height: calc(100vh - 64px);
   min-height: calc(100svh - 64px);
-  padding-top: 20px;
-  padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  padding-top: 24px;
+  padding-bottom: calc(44px + env(safe-area-inset-bottom));
 }
 
 .page-container {
   width: calc(100% - 32px);
-  max-width: 408px;
+  max-width: 428px;
   margin-inline: auto;
 }
 
 .page-heading {
   margin: 0;
   color: var(--navy);
-  font-size: clamp(28px, 8vw, 34px);
+  font-size: clamp(26px, 7vw, 28px);
   font-weight: 800;
   letter-spacing: -0.055em;
-  line-height: 1.22;
+  line-height: 1.28;
 }
 
 .page-subtitle {
   color: var(--ink-muted);
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 15px;
+  line-height: 1.65;
 }
 
 .section-heading {
@@ -306,7 +293,7 @@ a {
 .eyebrow,
 .ui-section-label {
   color: var(--primary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.07em;
 }
@@ -314,7 +301,7 @@ a {
 .surface-card {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 14px;
   box-shadow: none;
 }
 
@@ -322,7 +309,7 @@ a {
 .button-secondary,
 .ui-primary-button {
   display: inline-flex;
-  min-height: 54px;
+  min-height: 52px;
   align-items: center;
   justify-content: center;
   gap: 9px;
@@ -331,7 +318,8 @@ a {
   font-size: 15px;
   font-weight: 800;
   text-align: center;
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+  transition: background-color 150ms ease, border-color 150ms ease,
+    color 150ms ease, transform 100ms ease;
 }
 
 .button-primary,
@@ -365,7 +353,7 @@ a {
 }
 
 .ui-primary-button--large {
-  min-height: 56px;
+  min-height: 52px;
   font-size: 16px;
 }
 
@@ -400,10 +388,19 @@ a {
   border-color: #ccd8e2;
 }
 
+.button-primary:active:not(:disabled),
+.button-secondary:active:not(:disabled),
+.ui-primary-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
 .button-primary:disabled,
 .ui-primary-button:disabled,
 .ui-primary-button[aria-disabled="true"] {
-  opacity: 0.5;
+  color: #8ca0b2;
+  border-color: #dbe3ea;
+  background: #edf1f5;
+  opacity: 1;
 }
 
 .button-secondary {
@@ -427,7 +424,7 @@ a {
   border-radius: 999px;
   color: var(--mint-dark);
   background: var(--mint-soft);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -438,18 +435,19 @@ a {
 
 .form-input {
   width: 100%;
-  min-height: 48px;
+  min-height: 50px;
   padding: 12px 14px;
   border: 1px solid #cddbe8;
   border-radius: 10px;
   outline: none;
   color: var(--ink);
   background: #ffffff;
+  font-size: 16px;
 }
 
 .form-input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(47, 128, 237, 0.12);
+  box-shadow: 0 0 0 3px rgba(9, 105, 245, 0.12);
 }
 
 .ui-info-card {
@@ -488,8 +486,8 @@ a {
 
 .ui-info-card__content {
   color: #617b94;
-  font-size: 13px;
-  line-height: 1.65;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .ui-info-card__title + .ui-info-card__content {

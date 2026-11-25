@@ -9,6 +9,7 @@ import { IncidentDetailCard } from "./risk-map/incident-detail-card";
 import { IncidentLayerStatus } from "./risk-map/incident-layer-status";
 import { KakaoTrafficMap } from "./risk-map/kakao-traffic-map";
 import { LayerSelector } from "./risk-map/layer-selector";
+import { MapLegend } from "./risk-map/map-legend";
 import { RiskAreaDetailCard } from "./risk-map/risk-area-detail-card";
 import {
   MAP_LAYER_DEFINITIONS,
@@ -51,6 +52,11 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
     "BAROJAPGIL_REPORT",
   );
   const showIncidents = selectionIncludesLayer(selection, "INCIDENT");
+  const showCompactStatusGrid =
+    showIncidents &&
+    showHotspots &&
+    incidentState.status === "SUCCESS" &&
+    hotspotState.status === "SUCCESS";
   const selectedHotspot = useMemo(
     () =>
       showHotspots
@@ -111,44 +117,20 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
   }
 
   return (
-    <div className="mt-6 space-y-5">
+    <div className="mt-5 space-y-4">
       <LayerSelector selection={selection} onChange={selectLayer} />
 
       <section aria-labelledby="seoul-map-heading" className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-extrabold tracking-[0.06em] text-[var(--primary)]">
-              SEOUL SAFETY MAP
-            </p>
-            <h2
-              id="seoul-map-heading"
-              className="mt-1 text-base font-extrabold text-[var(--navy)]"
-            >
-              서울 교통안전 지도
-            </h2>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-1.5 text-[10px] font-extrabold">
-            {showTraffic ? (
-              <span className="rounded-full bg-[#e7f8f3] px-2 py-1 text-[#168f73]">
-                교통 실제
-              </span>
-            ) : null}
-            {showIncidents ? (
-              <span className="rounded-full bg-[#edf6ff] px-2 py-1 text-[#2569bc]">
-                돌발 실시간
-              </span>
-            ) : null}
-            {showHotspots ? (
-              <span className="rounded-full bg-[#fff4e4] px-2 py-1 text-[#a45e09]">
-                사고다발 공식
-              </span>
-            ) : null}
-            {showReportAreas ? (
-              <span className="rounded-full bg-[#fff4e4] px-2 py-1 text-[#a45e09]">
-                신고 DEMO
-              </span>
-            ) : null}
-          </div>
+        <div>
+          <h2
+            id="seoul-map-heading"
+            className="whitespace-nowrap text-lg font-extrabold tracking-[-0.025em] text-[var(--navy)]"
+          >
+            서울 교통안전 지도
+          </h2>
+          <p className="mt-1 text-xs font-semibold text-[var(--ink-muted)]">
+            지도를 움직이거나 표시를 눌러 상세 정보를 확인하세요.
+          </p>
         </div>
 
         <KakaoTrafficMap
@@ -168,21 +150,37 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
           onSelectIncident={selectIncident}
         />
 
-        <IncidentLayerStatus
-          state={incidentState}
-          visible={showIncidents}
-          onRetry={retryIncidents}
+        <MapLegend
+          showTraffic={showTraffic}
+          showHotspots={showHotspots}
+          showIncidents={showIncidents}
+          showReportAreas={showReportAreas}
         />
 
-        <HotspotLayerStatus
-          state={hotspotState}
-          visible={showHotspots}
-          onRetry={retryHotspots}
-        />
+        <div
+          className={
+            showCompactStatusGrid
+              ? "grid grid-cols-1 gap-2 min-[360px]:grid-cols-2"
+              : "space-y-2"
+          }
+          aria-label="지도 데이터 상태"
+        >
+          <IncidentLayerStatus
+            state={incidentState}
+            visible={showIncidents}
+            onRetry={retryIncidents}
+          />
+
+          <HotspotLayerStatus
+            state={hotspotState}
+            visible={showHotspots}
+            onRetry={retryHotspots}
+          />
+        </div>
 
         {selection === "BAROJAPGIL_REPORT" && !selectedArea ? (
           <p className="text-center text-xs font-semibold text-[var(--ink-muted)]">
-            DEMO 집계구역을 선택하면 요약을 확인할 수 있어요.
+            DEMO 집계구역을 누르면 요약을 확인할 수 있어요.
           </p>
         ) : null}
       </section>
@@ -212,30 +210,29 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
           {MAP_LAYER_DEFINITIONS.map((layer) => (
             <li
               key={layer.id}
-              className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+              className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
             >
               <div className="min-w-0">
                 <p className="text-sm font-extrabold text-[#294a65]">
                   {layer.label}
                 </p>
-                <p className="mt-0.5 truncate text-[11px] text-[var(--ink-muted)]">
+                <p className="mt-0.5 break-words text-xs leading-5 text-[var(--ink-muted)]">
                   {layer.source}
                 </p>
               </div>
               <span
-                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${sourceStatusClassName[layer.status]}`}
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${sourceStatusClassName[layer.status]}`}
               >
                 {layer.statusLabel}
               </span>
             </li>
           ))}
         </ul>
-        <p className="mt-3 border-t border-[#e7edf3] pt-3 text-[11px] font-semibold leading-5 text-[#6b839a]">
-          출처: 한국도로교통공단 교통사고분석시스템(TAAS) / 공공데이터포털
-          <br />
-          서울특별시 TOPIS / 서울 열린데이터광장
-        </p>
-        <p className="mt-2 text-[11px] font-semibold leading-5 text-[#8a6b42]">
+        <div className="mt-3 border-t border-[#e7edf3] pt-3 text-xs font-semibold leading-5 text-[#6b839a]">
+          <p>TAAS · 공공데이터포털</p>
+          <p>서울 TOPIS · 서울 열린데이터광장</p>
+        </div>
+        <p className="mt-2 rounded-lg bg-[#fff8ed] px-3 py-2 text-xs font-semibold leading-5 text-[#7f6846]">
           사고다발지역은 실시간 정보가 아닌 과거 교통사고 통계입니다.
         </p>
       </section>
@@ -244,17 +241,17 @@ export default function RiskMapView({ kakaoMapKey }: RiskMapViewProps) {
         <h2 className="text-sm font-extrabold text-[var(--navy)]">
           개인정보 보호
         </h2>
-        <p className="mt-1 text-xs leading-5 text-[#53786f]">
+        <p className="mt-1 text-[13px] leading-5 text-[#53786f]">
           차량번호·신고자·원본 미디어·이동경로·개별 신고 위치는 지도에 표시하지 않습니다.
         </p>
-        <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl bg-white/75 p-3.5">
+        <label className="mt-3 flex min-h-12 cursor-pointer items-start gap-3 rounded-xl bg-white/80 p-3.5">
           <input
             type="checkbox"
             checked={riskConsent}
             onChange={(event) => setRiskConsent(event.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--primary)]"
+            className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--primary)]"
           />
-          <span className="text-xs font-bold leading-5 text-[#365f57]">
+          <span className="text-[13px] font-bold leading-5 text-[#365f57]">
             비식별 교통위험 집계 제공 동의
             <span className="ml-1 font-normal text-[#6b8982]">(선택)</span>
           </span>

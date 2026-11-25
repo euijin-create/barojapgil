@@ -15,23 +15,6 @@ import { MediaPreview } from "./media-preview";
 const MOCK_ANALYSIS_NOTICE =
   "현재 데모 분석 결과이며 실제 업로드 파일을 AI가 판독한 결과가 아닙니다.";
 
-function ArrowIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-5 w-5"
-      aria-hidden="true"
-    >
-      <path d="M5 12h14M14 7l5 5-5 5" />
-    </svg>
-  );
-}
-
 function parseOffset(offset: string) {
   const parts = offset.split(":").map(Number);
   if (
@@ -42,6 +25,50 @@ function parseOffset(offset: string) {
     return null;
   }
   return parts.reduce((seconds, part) => seconds * 60 + part, 0);
+}
+
+function uniqueText(items: readonly string[]) {
+  return [...new Set(items.map((item) => item.trim()).filter(Boolean))];
+}
+
+function ReasoningGroup({
+  title,
+  items,
+  tone = "neutral",
+}: {
+  title: string;
+  items: string[];
+  tone?: "neutral" | "orange";
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div
+      className={`rounded-xl px-4 py-3.5 ${
+        tone === "orange" ? "bg-[var(--orange-soft)]" : "bg-[#f6f9fc]"
+      }`}
+    >
+      <h3
+        className={`text-sm font-extrabold ${
+          tone === "orange" ? "text-[#7b4d11]" : "text-[var(--navy)]"
+        }`}
+      >
+        {title}
+      </h3>
+      <ul
+        className={`mt-2 space-y-1.5 text-sm leading-6 ${
+          tone === "orange" ? "text-[#76501d]" : "text-[#56738e]"
+        }`}
+      >
+        {items.map((item) => (
+          <li key={item} className="flex items-start gap-2">
+            <span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-current" aria-hidden="true" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 export function ResultsScreen() {
@@ -80,20 +107,37 @@ export function ResultsScreen() {
     imageAnalysisResult?.warnings.filter(
       (warning) => !(analysisIsDemo && warning === MOCK_ANALYSIS_NOTICE),
     ) ?? [];
+  const primaryReasoning = imageAnalysisResult
+    ? uniqueText([
+        imageAnalysisResult.summary,
+        imageAnalysisResult.reasoningSummary,
+      ])
+    : uniqueText([selectedCandidate.reasoning]);
+  const additionalChecks = imageAnalysisResult
+    ? uniqueText(imageAnalysisResult.missingEvidence)
+    : uniqueText([
+        ...selectedCandidate.evidence.unclear,
+        ...selectedCandidate.evidence.missing,
+      ]);
+  const analysisLimitations = imageAnalysisResult
+    ? uniqueText(visibleWarnings)
+    : mediaKind === "video"
+      ? ["현재 영상 후보는 실제 AI 영상 판독 결과가 아닌 데모입니다."]
+      : [];
 
   return (
-    <div className="page-container space-y-7 pb-10 pt-4">
+    <div className="page-container space-y-6 pb-10 pt-4">
       <header>
-        <SectionLabel>{isPhoto ? "AI 참고 분석" : "AI RECOMMENDATION"}</SectionLabel>
+        <SectionLabel>{isPhoto ? "AI 분석 결과" : "AI 장면 추천"}</SectionLabel>
         <h1 className="mt-3 whitespace-pre-line text-[30px] font-extrabold leading-[1.27] tracking-[-0.05em] text-[var(--navy)]">
           {isPhoto
-            ? "사진 1장의\nAI 참고 결과예요."
-            : "AI가 찾은\n3개의 의심 장면이에요."}
+            ? "AI가 자료에서 확인한\n내용이에요."
+            : "AI가 찾은\n의심 장면이에요."}
         </h1>
         <p className="mt-3 text-sm leading-6 text-[var(--ink-muted)]">
           {isPhoto
             ? "원본 사진과 비교하며 분석 내용을 확인해주세요."
-            : "신고 준비에 사용할 장면 하나를 선택해주세요."}
+            : `${candidates.length}개 후보 중 신고 준비에 사용할 장면을 선택해주세요.`}
         </p>
       </header>
 
@@ -116,11 +160,77 @@ export function ResultsScreen() {
 
       {needsTemporalEvidence ? (
         <InfoCard tone="orange" title="추가 영상 확인이 필요해요" role="note">
-          사진만으로 차량의 이동 과정을 확인할 수 없어 영상 확인이
-          필요합니다. 현재 보이는 정지 위치·차선·신호 상태는 AI 참고
-          정보로만 확인해주세요.
+          사진만으로 이동 과정을 확인할 수 없어요. 전후 영상이 있다면 함께
+          확인해주세요.
         </InfoCard>
       ) : null}
+
+      {selectedCandidate ? (
+        <section
+          className="rounded-2xl border border-[#cfe4fa] bg-[var(--primary-soft)] p-5"
+          aria-labelledby="result-summary-title"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-extrabold text-[var(--primary-dark)]">
+              예상 위반 유형
+            </p>
+            <StatusBadge
+              tone={isPhoto && analysisIsDemo === false ? "blue" : "orange"}
+            >
+              {isPhoto && analysisIsDemo === false
+                ? "업로드 자료 분석"
+                : "데모 결과"}
+            </StatusBadge>
+          </div>
+          <h2
+            id="result-summary-title"
+            className="mt-3 text-[23px] font-extrabold leading-tight tracking-[-0.035em] text-[var(--navy)]"
+          >
+            {violationLabels[selectedCandidate.type]}
+            {selectedCandidate.type === "unknown" ? "" : " 의심"}
+          </h2>
+          <div className="mt-4 flex items-center gap-3">
+            <span className="text-sm font-semibold text-[#607d99]">
+              AI 분류 참고값
+            </span>
+            <span
+              className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[#d6e5f4]"
+              aria-hidden="true"
+            >
+              <span
+                className="block h-full rounded-full bg-[var(--primary)]"
+                style={{ width: `${selectedCandidate.confidence}%` }}
+              />
+            </span>
+            <strong className="text-sm tabular-nums text-[var(--navy)]">
+              {selectedCandidate.confidence}%
+            </strong>
+          </div>
+          <p className="mt-3 text-xs font-semibold leading-5 text-[#66839e]">
+            위반 확률이나 검증된 AI 정확도를 의미하지 않습니다.
+          </p>
+        </section>
+      ) : null}
+
+      <section
+        className="surface-card space-y-3 p-4"
+        aria-labelledby="analysis-reasoning-title"
+      >
+        <h2 id="analysis-reasoning-title" className="section-heading">
+          AI 참고 분석 내용
+        </h2>
+        <ReasoningGroup title="주요 판단 근거" items={primaryReasoning} />
+        <ReasoningGroup
+          title="추가 확인이 필요한 사항"
+          items={additionalChecks}
+          tone="orange"
+        />
+        <ReasoningGroup
+          title="판단의 한계"
+          items={analysisLimitations}
+          tone="orange"
+        />
+      </section>
 
       <section className="surface-card overflow-hidden p-4" aria-labelledby="preview-title">
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -139,95 +249,51 @@ export function ResultsScreen() {
           previewUrl={previewUrl}
           fileName={selectedFile?.name}
           videoRef={videoRef}
-          label={selectedFile ? "등록한 자료" : "데모 영상"}
+          label={
+            selectedFile ? "등록한 자료" : isPhoto ? "예시 사진" : "데모 영상"
+          }
         />
-
-        {selectedCandidate ? (
-          <div className="mt-4 border-t border-[#e1eaf2] pt-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-[var(--primary)]">현재 선택 · AI 참고 분석</p>
-                <p className="mt-1 text-base font-extrabold text-[var(--navy)]">
-                  {violationLabels[selectedCandidate.type]}
-                  {selectedCandidate.type === "unknown" ? "" : " 의심"}
-                </p>
-              </div>
-              <span className="shrink-0 text-sm font-extrabold text-[var(--primary-dark)]">
-                신뢰도 {selectedCandidate.confidence}%
-              </span>
-            </div>
-            <p className="mt-2 text-[13px] leading-5 text-[#667e94]">
-              {selectedCandidate.reasoning}
-            </p>
-          </div>
-        ) : null}
       </section>
 
-      {visibleWarnings.length > 0 ? (
-        <section
-          className="rounded-xl border border-[#f4d9ad] bg-[var(--orange-soft)] p-4 text-sm leading-6 text-[#76501d]"
-          aria-labelledby="analysis-warning-title"
-        >
-          <h2 id="analysis-warning-title" className="font-extrabold text-[#7b4d11]">
-            분석 결과 확인 안내
-          </h2>
-          <ul className="mt-2 space-y-1.5">
-            {visibleWarnings.map((warning) => (
-              <li key={warning} className="flex items-start gap-2">
-                <span aria-hidden="true">•</span>
-                <span>{warning}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <section aria-labelledby="candidate-title">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <SectionLabel tone={isPhoto ? "blue" : "mint"}>
-              {isPhoto ? "AI 참고 분석" : "장면 타임라인"}
-            </SectionLabel>
-            <h2 id="candidate-title" className="section-heading mt-1.5">
-              {isPhoto ? "사진 분석 결과" : "의심 장면을 선택해주세요"}
-            </h2>
+      {!isPhoto ? (
+        <section aria-labelledby="candidate-title">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <SectionLabel tone="mint">장면 타임라인</SectionLabel>
+              <h2 id="candidate-title" className="section-heading mt-1.5">
+                의심 장면을 선택해주세요
+              </h2>
+            </div>
+            <span className="shrink-0 text-xs font-bold text-[var(--ink-muted)]">
+              {candidates.length}개 후보
+            </span>
           </div>
-          <span className="shrink-0 text-xs font-bold text-[var(--ink-muted)]">
-            {candidates.length}개 {isPhoto ? "결과" : "후보"}
-          </span>
-        </div>
 
-        {candidates.length === 0 ? (
-          <div className="surface-card mt-4 p-6 text-center">
-            <p className="font-extrabold text-[var(--navy)]">의심 장면을 찾지 못했습니다</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--ink-muted)]">
-              자료를 다시 확인하거나 다른 사진·영상을 선택해주세요.
-            </p>
-            <Link href="/upload" className="button-secondary mt-5 w-full">
-              다른 자료 선택
-            </Link>
-          </div>
-        ) : (
-          <ol
-            className={`relative mt-4 space-y-3 ${
-              isPhoto
-                ? ""
-                : "before:absolute before:bottom-8 before:left-[7px] before:top-8 before:w-px before:bg-[#bdd8f5]"
-            }`}
-          >
+          {candidates.length === 0 ? (
+            <div className="surface-card mt-4 p-6 text-center">
+              <p className="font-extrabold text-[var(--navy)]">
+                의심 장면을 찾지 못했습니다
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--ink-muted)]">
+                자료를 다시 확인하거나 다른 사진·영상을 선택해주세요.
+              </p>
+              <Link href="/upload" className="button-secondary mt-5 w-full">
+                다른 자료 선택
+              </Link>
+            </div>
+          ) : (
+            <ol className="relative mt-4 space-y-3 before:absolute before:bottom-8 before:left-[7px] before:top-8 before:w-px before:bg-[#bdd8f5]">
             {candidates.map((candidate, index) => {
               const selected =
                 candidate.id === (selectedCandidateId ?? selectedCandidate?.id);
               return (
-                <li key={candidate.id} className={`relative ${isPhoto ? "" : "pl-6"}`}>
-                  {!isPhoto ? (
-                    <span
-                      className={`absolute left-0 top-7 z-10 h-[15px] w-[15px] rounded-full border-[3px] border-white ${
-                        selected ? "bg-[var(--primary)]" : "bg-[#a6bed3]"
-                      }`}
-                      aria-hidden="true"
-                    />
-                  ) : null}
+                <li key={candidate.id} className="relative pl-6">
+                  <span
+                    className={`absolute left-0 top-7 z-10 h-[15px] w-[15px] rounded-full border-[3px] border-white ${
+                      selected ? "bg-[var(--primary)]" : "bg-[#a6bed3]"
+                    }`}
+                    aria-hidden="true"
+                  />
                   <button
                     type="button"
                     onClick={() => chooseCandidate(candidate.id, candidate.start)}
@@ -241,9 +307,7 @@ export function ResultsScreen() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-xs font-extrabold text-[var(--primary-dark)]">
-                          {isPhoto
-                            ? "단일 사진"
-                            : `장면 ${String(index + 1).padStart(2, "0")} · ${candidate.start} ~ ${candidate.end}`}
+                          {`장면 ${String(index + 1).padStart(2, "0")} · ${candidate.start} ~ ${candidate.end}`}
                         </p>
                         <p className="mt-1.5 text-[16px] font-extrabold text-[var(--navy)]">
                           {violationLabels[candidate.type]}
@@ -257,7 +321,7 @@ export function ResultsScreen() {
 
                     <div className="mt-4 flex items-center gap-3">
                       <span className="text-xs font-semibold text-[var(--ink-muted)]">
-                        AI 분석 신뢰도
+                        AI 분류 참고값
                       </span>
                       <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[#dce6ef]" aria-hidden="true">
                         <span
@@ -271,18 +335,19 @@ export function ResultsScreen() {
                 </li>
               );
             })}
-          </ol>
-        )}
-      </section>
+            </ol>
+          )}
+        </section>
+      ) : null}
 
-      <InfoCard tone="neutral" role="note">
-        AI 참고 분석이며 최종 판단은 관계기관이 수행합니다. 선택한 장면과 정보는 다음 화면에서 직접 확인하고 수정해주세요.
-      </InfoCard>
+      <p className="text-center text-xs font-semibold leading-5 text-[#667f96]" role="note">
+        AI 참고 분석이며 최종 판단은 관계기관이 수행합니다.
+      </p>
 
       <div className="space-y-3">
         {candidates.length > 0 && selectedCandidate ? (
-          <PrimaryButton href="/diagnosis" fullWidth trailingIcon={<ArrowIcon />}>
-            선택한 장면으로 계속
+          <PrimaryButton href="/diagnosis" fullWidth>
+            {isPhoto ? "분석 내용 확인하기" : "선택한 장면으로 계속"}
           </PrimaryButton>
         ) : (
           <PrimaryButton type="button" fullWidth disabled>
@@ -290,7 +355,7 @@ export function ResultsScreen() {
           </PrimaryButton>
         )}
         <Link href="/upload" className="button-secondary w-full">
-          다른 자료 선택
+          자료 다시 선택
         </Link>
       </div>
     </div>

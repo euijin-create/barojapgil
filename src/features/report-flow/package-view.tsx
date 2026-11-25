@@ -42,12 +42,21 @@ function cleanSuggestion(value: string, missingLabels: string[]) {
   return missingLabels.includes(normalized) ? "" : normalized;
 }
 
+function RequiredMark() {
+  return (
+    <span className="ml-1 text-xs font-bold text-[var(--primary)]" aria-hidden="true">
+      필수
+    </span>
+  );
+}
+
 function EditableField({
   id,
   label,
   value,
   suggested,
   placeholder,
+  errorMessage,
   onChange,
 }: {
   id: string;
@@ -55,17 +64,20 @@ function EditableField({
   value: string;
   suggested: string;
   placeholder: string;
+  errorMessage?: string;
   onChange: (value: string) => void;
 }) {
   const sourceId = `${id}-source`;
+  const errorId = `${id}-error`;
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
         <label htmlFor={id} className="text-sm font-extrabold text-[var(--navy)]">
           {label}
+          <RequiredMark />
         </label>
-        <span id={sourceId} className="text-[11px] font-semibold text-[#7690a8]">
+        <span id={sourceId} className="text-xs font-semibold text-[#7690a8]">
           {sourceLabel(value, suggested)}
         </span>
       </div>
@@ -74,10 +86,17 @@ function EditableField({
         type="text"
         value={value}
         placeholder={placeholder}
-        aria-describedby={sourceId}
+        required
+        aria-invalid={Boolean(errorMessage)}
+        aria-describedby={errorMessage ? `${sourceId} ${errorId}` : sourceId}
         className="form-input w-full"
         onChange={(event) => onChange(event.target.value)}
       />
+      {errorMessage ? (
+        <p id={errorId} className="text-xs font-semibold text-red-700">
+          {errorMessage}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -119,17 +138,17 @@ export default function PackageView() {
       selectedCandidate.type === "unknown");
   const statementNeedsSoftening = containsAssertiveLanguage(draft.statement);
   const occurrenceIsMissing = !occurredAt.date || !occurredAt.time;
-  const validationMessages = [
-    !draft.plate.trim() && "차량번호를 확인해주세요.",
-    !draft.location.trim() && "발생 장소를 입력해주세요.",
-    !draft.statement.trim() && "신고 내용을 입력해주세요.",
-    draft.violationReviewMode === "other" &&
-      !draft.violationTypeDetail.trim() &&
-      "기타 교통위반 내용을 입력해주세요.",
-  ].filter((item): item is string => Boolean(item));
+  const plateIsMissing = !draft.plate.trim();
+  const locationIsMissing = !draft.location.trim();
+  const statementIsMissing = !draft.statement.trim();
+  const otherTypeIsMissing =
+    draft.violationReviewMode === "other" && !draft.violationTypeDetail.trim();
   const canContinue =
     !occurrenceIsMissing &&
-    validationMessages.length === 0 &&
+    !plateIsMissing &&
+    !locationIsMissing &&
+    !statementIsMissing &&
+    !otherTypeIsMissing &&
     !statementNeedsSoftening;
 
   function updateOccurredAt(part: "date" | "time", value: string) {
@@ -182,9 +201,9 @@ export default function PackageView() {
 
   return (
     <div className="page-container space-y-6 pb-10 pt-4">
-      <section className="overflow-hidden rounded-2xl border border-[#d5e9ff] bg-[#edf6ff] px-6 py-7 sm:px-8 sm:py-9">
+      <section className="overflow-hidden rounded-2xl border border-[#d5e9ff] bg-[#edf6ff] px-6 py-7 sm:px-8">
         <p className="text-xs font-extrabold tracking-[0.08em] text-[var(--primary)]">
-          AI AUTO-FILL
+          AI 자동 작성
         </p>
         <h1 className="mt-4 whitespace-pre-line text-[30px] font-extrabold leading-[1.25] tracking-[-0.055em] text-[var(--navy)] sm:text-[34px]">
           {"신고서를\n자동으로 작성했어요."}
@@ -203,8 +222,9 @@ export default function PackageView() {
             <div className="flex items-center justify-between gap-3">
               <label htmlFor="package-type" className="text-sm font-extrabold text-[var(--navy)]">
                 위반 유형
+                <RequiredMark />
               </label>
-              <span id="package-type-source" className="text-[11px] font-semibold text-[#7690a8]">
+              <span id="package-type-source" className="text-xs font-semibold text-[#7690a8]">
                 {typeMatchesSuggestion ? "AI 제안 · 수정 가능" : "사용자 수정값"}
               </span>
             </div>
@@ -235,10 +255,23 @@ export default function PackageView() {
                   maxLength={80}
                   placeholder="관찰한 상황을 확정적 표현 없이 입력해주세요."
                   className="form-input w-full"
+                  required
+                  aria-invalid={otherTypeIsMissing}
+                  aria-describedby={
+                    otherTypeIsMissing ? "package-type-detail-error" : undefined
+                  }
                   onChange={(event) =>
                     updateDraft({ violationTypeDetail: event.target.value })
                   }
                 />
+                {otherTypeIsMissing ? (
+                  <p
+                    id="package-type-detail-error"
+                    className="mt-2 text-xs font-semibold text-red-700"
+                  >
+                    기타 교통위반 내용을 입력해주세요.
+                  </p>
+                ) : null}
               </div>
             ) : null}
             {draft.violationReviewMode === "uncertain" ? (
@@ -254,6 +287,7 @@ export default function PackageView() {
             value={draft.plate}
             suggested={suggestedPlate}
             placeholder="차량번호를 확인해주세요."
+            errorMessage={plateIsMissing ? "차량번호를 확인해주세요." : undefined}
             onChange={(plate) => updateDraft({ plate })}
           />
 
@@ -265,9 +299,10 @@ export default function PackageView() {
           >
             <legend className="text-sm font-extrabold text-[var(--navy)]">
               발생 일시
+              <RequiredMark />
             </legend>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="min-w-0 text-xs font-bold text-[#607b94]">
+              <label className="min-w-0 text-sm font-bold text-[#607b94]">
                 발생 날짜
                 <input
                   id="package-date"
@@ -280,11 +315,11 @@ export default function PackageView() {
                     updateOccurredAt("date", event.target.value)
                   }
                 />
-                <span className="mt-1.5 block text-[10px] font-semibold text-[#7690a8]">
+                <span className="mt-1.5 block text-xs font-semibold text-[#7690a8]">
                   {sourceLabel(occurredAt.date, suggestedOccurredAt.date)}
                 </span>
               </label>
-              <label className="min-w-0 text-xs font-bold text-[#607b94]">
+              <label className="min-w-0 text-sm font-bold text-[#607b94]">
                 발생 시각
                 <input
                   id="package-time"
@@ -298,7 +333,7 @@ export default function PackageView() {
                     updateOccurredAt("time", event.target.value)
                   }
                 />
-                <span className="mt-1.5 block text-[10px] font-semibold text-[#7690a8]">
+                <span className="mt-1.5 block text-xs font-semibold text-[#7690a8]">
                   {sourceLabel(occurredAt.time, suggestedOccurredAt.time)}
                 </span>
               </label>
@@ -319,6 +354,7 @@ export default function PackageView() {
             value={draft.location}
             suggested={suggestedLocation}
             placeholder="도로명 주소 또는 건물명"
+            errorMessage={locationIsMissing ? "발생 장소를 입력해주세요." : undefined}
             onChange={(location) => updateDraft({ location })}
           />
 
@@ -326,10 +362,11 @@ export default function PackageView() {
             <div className="flex items-center justify-between gap-3">
               <label htmlFor="package-statement" className="text-sm font-extrabold text-[var(--navy)]">
                 신고 내용
+                <RequiredMark />
               </label>
               <button
                 type="button"
-                className="text-xs font-extrabold text-[var(--primary)] underline decoration-[#a9ccee] underline-offset-4"
+                className="min-h-11 rounded-lg px-2 text-xs font-extrabold text-[var(--primary)] underline decoration-[#a9ccee] underline-offset-4 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                 onClick={confirmRegenerateStatement}
               >
                 초안 다시 만들기
@@ -338,15 +375,29 @@ export default function PackageView() {
             <textarea
               id="package-statement"
               value={draft.statement}
-              rows={8}
+              rows={7}
               placeholder="예: 영상에서 위반이 의심되는 장면으로 보여 확인을 요청드립니다."
-              aria-describedby="package-statement-help"
+              required
+              aria-invalid={statementIsMissing || statementNeedsSoftening}
+              aria-describedby={
+                statementIsMissing
+                  ? "package-statement-help package-statement-error"
+                  : "package-statement-help"
+              }
               className="form-input w-full resize-y leading-7"
               onChange={(event) => updateDraft({ statement: event.target.value })}
             />
             <p id="package-statement-help" className="text-xs text-[var(--ink-muted)]">
               {draft.statement.length}자
             </p>
+            {statementIsMissing ? (
+              <p
+                id="package-statement-error"
+                className="text-xs font-semibold text-red-700"
+              >
+                신고 내용을 입력해주세요.
+              </p>
+            ) : null}
             {statementNeedsSoftening ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950" role="alert">
                 위반을 확정하는 표현을 완화해주세요.
@@ -355,23 +406,11 @@ export default function PackageView() {
           </div>
         </section>
 
-        {validationMessages.length > 0 ? (
-          <ul
-            className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
-            role="status"
-          >
-            {validationMessages.map((message) => (
-              <li key={message}>{message}</li>
-            ))}
-          </ul>
-        ) : null}
-
         <div className="space-y-3">
           <PrimaryButton
             type="submit"
             fullWidth
             disabled={!canContinue}
-            trailingIcon={<span aria-hidden="true">→</span>}
           >
             신고 준비 완료하기
           </PrimaryButton>

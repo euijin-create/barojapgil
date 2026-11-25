@@ -37,9 +37,6 @@ function AnalysisFact({
           {value || "확인 필요"}
         </span>
       </div>
-      <p className="mt-1 text-right text-[11px] font-semibold text-[#7f96ab]">
-        AI 추출 정보 · 직접 확인 필요
-      </p>
     </div>
   );
 }
@@ -58,26 +55,27 @@ export default function DiagnosisView() {
     <div className="page-container space-y-6 pb-10 pt-4">
       <section className="overflow-hidden rounded-2xl bg-[var(--navy)] p-6 text-white">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <StatusBadge tone="blue">AI 증거 진단</StatusBadge>
+          <StatusBadge tone="blue">AI 1차 분석</StatusBadge>
           <StatusBadge tone={needsMoreReview ? "orange" : "mint"}>
             {needsMoreReview ? "추가 확인 필요" : "신고 검토 가능"}
           </StatusBadge>
         </div>
 
-        <h1 className="mt-7 text-[29px] font-extrabold leading-[1.28] tracking-[-0.05em]">
-          신고에 필요한 정보를
-          <br />
-          확인했어요.
+        <p className="mt-7 text-sm font-semibold text-[#bcd0e0]">
+          AI가 예상한 위반 유형
+        </p>
+        <h1 className="mt-2 text-[29px] font-extrabold leading-[1.28] tracking-[-0.05em]">
+          {displayViolationType(selectedCandidate.type)}
         </h1>
+        <p className="mt-3 text-sm leading-6 text-[#d4e2ec]">
+          원본 자료와 아래 정보를 직접 확인해주세요.
+        </p>
 
-        <div className="mt-8 rounded-xl border border-white/15 bg-white/8 p-4">
+        <div className="mt-6 rounded-xl border border-white/15 bg-white/8 p-4">
           <div className="flex items-end justify-between gap-3">
             <div>
               <p className="text-xs font-semibold text-[#bcd0e0]">
-                AI 분류 참고 신뢰도
-              </p>
-              <p className="mt-1 text-sm text-[#dce8f1]">
-                법적 판단이나 신고 결과를 뜻하지 않아요.
+                AI 분류 참고값
               </p>
             </div>
             <strong className="text-3xl font-extrabold">{confidence}%</strong>
@@ -85,7 +83,7 @@ export default function DiagnosisView() {
           <div
             className="mt-4 h-2 overflow-hidden rounded-full bg-white/15"
             role="meter"
-            aria-label="AI 분류 참고 신뢰도"
+            aria-label="AI 분류 참고값"
             aria-valuenow={confidence}
             aria-valuemin={0}
             aria-valuemax={100}
@@ -95,6 +93,9 @@ export default function DiagnosisView() {
               style={{ width: `${confidence}%` }}
             />
           </div>
+          <p className="mt-3 text-xs leading-5 text-[#bcd0e0]">
+            위반 확률이나 검증된 AI 정확도를 의미하지 않습니다.
+          </p>
         </div>
       </section>
 
@@ -112,13 +113,11 @@ export default function DiagnosisView() {
       ) : null}
 
       <section className="surface-card px-5 py-2" aria-labelledby="ai-facts-title">
-        <div className="border-b border-[#e6edf3] py-4">
-          <p className="text-xs font-extrabold tracking-[0.07em] text-[var(--primary)]">
-            AI 참고 정보
-          </p>
-          <h2 id="ai-facts-title" className="mt-1 text-lg font-extrabold text-[var(--navy)]">
+        <div className="flex items-center justify-between gap-3 border-b border-[#e6edf3] py-4">
+          <h2 id="ai-facts-title" className="text-lg font-extrabold text-[var(--navy)]">
             신고 핵심정보
           </h2>
+          <StatusBadge tone="blue">수정 가능</StatusBadge>
         </div>
         <AnalysisFact
           label="예상 위반 유형"
@@ -129,16 +128,13 @@ export default function DiagnosisView() {
         <AnalysisFact label="발생 장소" value={selectedCandidate.location} />
       </section>
 
-      <InfoCard tone="blue" title="AI 참고 분석">
-        AI가 제안한 차량번호, 시각, 장소와 예상 유형은 부정확할 수 있어요.
-        다음 단계에서 실제 자료와 대조해 직접 선택하거나 수정해주세요. 최종
-        위법 판단은 관계기관이 수행합니다.
-      </InfoCard>
+      <p className="text-center text-xs font-semibold leading-5 text-[#667f96]">
+        AI 참고 분석이며 최종 판단은 관계기관이 수행합니다.
+      </p>
 
       <PrimaryButton
         href="/diagnosis?step=review"
         fullWidth
-        trailingIcon={<span aria-hidden="true">→</span>}
       >
         예상 유형 수정·확인하기
       </PrimaryButton>

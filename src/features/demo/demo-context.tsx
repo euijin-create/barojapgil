@@ -244,6 +244,68 @@ function createStatement(
   return `${time} ${location} 부근에서 차량번호 ${plate} 차량과 관련해 ${observedScene} 첨부한 ${medium}을 확인해주시기 바랍니다.`;
 }
 
+function statementTimeToken(value: string) {
+  return formatOccurredAtForStatement(value) ?? "[발생 일시 확인 필요]";
+}
+
+function statementLocationToken(value: string) {
+  return (
+    normalizeCandidateValue(value, ["장소 확인 필요", "확인 필요"]) ||
+    "[발생 장소 확인 필요]"
+  );
+}
+
+function statementPlateToken(value: string) {
+  return (
+    normalizeCandidateValue(value, ["확인 필요", "차량번호 확인 필요"]) ||
+    "[차량번호 확인 필요]"
+  );
+}
+
+function replaceStatementToken(
+  statement: string,
+  previousToken: string,
+  nextToken: string,
+) {
+  if (previousToken === nextToken || !statement.includes(previousToken)) {
+    return statement;
+  }
+  return statement.replace(previousToken, nextToken);
+}
+
+function synchronizeEditedStatementFacts(
+  statement: string,
+  current: ReportDraft,
+  next: ReportDraft,
+  patch: Partial<ReportDraft>,
+) {
+  let synchronized = statement;
+
+  if (patch.occurredAt !== undefined) {
+    synchronized = replaceStatementToken(
+      synchronized,
+      statementTimeToken(current.occurredAt),
+      statementTimeToken(next.occurredAt),
+    );
+  }
+  if (patch.location !== undefined) {
+    synchronized = replaceStatementToken(
+      synchronized,
+      statementLocationToken(current.location),
+      statementLocationToken(next.location),
+    );
+  }
+  if (patch.plate !== undefined) {
+    synchronized = replaceStatementToken(
+      synchronized,
+      statementPlateToken(current.plate),
+      statementPlateToken(next.plate),
+    );
+  }
+
+  return synchronized;
+}
+
 function createDraft(candidate: Candidate): ReportDraft {
   const draft: ReportDraft = {
     plate: normalizeCandidateValue(candidate.plate, [
@@ -469,16 +531,24 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       if (patch.statement !== undefined) statementEditedRef.current = true;
       setDraft((current) => {
         const next = { ...current, ...patch };
-        if (
-          patch.statement === undefined &&
-          !statementEditedRef.current &&
-          (patch.plate !== undefined ||
+        if (patch.statement === undefined) {
+          const factsChanged =
+            patch.plate !== undefined ||
             patch.occurredAt !== undefined ||
             patch.location !== undefined ||
             patch.violationType !== undefined ||
-            patch.violationTypeDetail !== undefined)
-        ) {
-          next.statement = createStatement(selectedCandidate, next);
+            patch.violationTypeDetail !== undefined;
+
+          if (factsChanged && !statementEditedRef.current) {
+            next.statement = createStatement(selectedCandidate, next);
+          } else if (statementEditedRef.current) {
+            next.statement = synchronizeEditedStatementFacts(
+              current.statement,
+              current,
+              next,
+              patch,
+            );
+          }
         }
         return next;
       });

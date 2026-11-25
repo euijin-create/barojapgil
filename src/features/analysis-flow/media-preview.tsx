@@ -21,7 +21,7 @@ export function MediaPreview({
 }: MediaPreviewProps) {
   if (previewUrl && kind === "video") {
     return (
-      <div className="relative overflow-hidden rounded-[24px] bg-slate-950">
+      <div className="relative overflow-hidden rounded-2xl bg-slate-950">
         <video
           ref={videoRef}
           controls
@@ -43,7 +43,7 @@ export function MediaPreview({
 
   if (previewUrl && kind === "image") {
     return (
-      <div className="relative overflow-hidden rounded-[24px] bg-slate-950">
+      <div className="relative overflow-hidden rounded-2xl bg-slate-950">
         {/* 브라우저에서 선택한 임시 object URL이므로 Next 이미지 최적화 대상이 아닙니다. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -62,7 +62,7 @@ export function MediaPreview({
   }
 
   return (
-    <div className="relative flex aspect-video flex-col items-center justify-center overflow-hidden rounded-[24px] bg-[#152b3a] text-center text-white">
+    <div className="relative flex aspect-video flex-col items-center justify-center overflow-hidden rounded-2xl bg-[#152b3a] text-center text-white">
       <div className="absolute inset-0 opacity-50" aria-hidden="true">
         <div className="absolute bottom-[-35%] left-[25%] h-[115%] w-[50%] rotate-[-17deg] bg-[#233f50]" />
         <div className="absolute bottom-[-35%] left-[39%] h-[115%] w-[3px] rotate-[-17deg] bg-amber-300/70" />
@@ -75,8 +75,8 @@ export function MediaPreview({
           <path d="m9.5 9 5 3-5 3V9Z" />
         </svg>
       </div>
-      <p className="relative z-10 mt-3 text-sm font-semibold">샘플 영상 미리보기</p>
-      <p className="relative z-10 mt-1 text-xs text-slate-200">실제 파일은 전송되지 않습니다</p>
+      <p className="relative z-10 mt-3 text-sm font-semibold">체험용 영상 화면</p>
+      <p className="relative z-10 mt-1 text-xs text-slate-200">실제 영상 분석 결과가 아니에요</p>
       {label ? (
         <span className="absolute left-3 top-3 z-10 rounded-full bg-slate-950/70 px-3 py-1 text-xs font-semibold text-white">
           {label}

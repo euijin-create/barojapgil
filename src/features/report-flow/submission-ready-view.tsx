@@ -47,13 +47,13 @@ export default function SubmissionReadyView() {
           <CheckIcon />
         </div>
         <SectionLabel tone="mint" className="mt-5">
-          SUBMISSION READY
+          신고 준비 완료
         </SectionLabel>
         <h1 className="page-heading mt-3 whitespace-pre-line">
           {"신고 준비가\n완료되었어요."}
         </h1>
         <p className="page-subtitle mt-3">
-          안전신문고에서 최종 제출하면 접수번호를 앱에 등록할 수 있어요.
+          안전신문고에서 내용을 확인한 뒤 직접 제출해주세요.
         </p>
       </header>
 
@@ -76,9 +76,9 @@ export default function SubmissionReadyView() {
         </dl>
       </section>
 
-      <InfoCard tone="mint" title="안전신문고로 이동할 수 있어요">
-        버튼을 누른 경우에만 안전신문고 외부 페이지가 열립니다. 자료 첨부와
-        최종 제출은 사용자가 직접 진행해주세요.
+      <InfoCard tone="mint" title="이제 직접 제출해주세요">
+        아래 버튼을 누른 경우에만 안전신문고가 열려요. 자료 첨부와 최종
+        제출은 사용자가 직접 진행합니다.
       </InfoCard>
 
       <section className="space-y-3" aria-label="제출 단계 이동">

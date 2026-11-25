@@ -107,9 +107,9 @@ export function SafetyCheckScreen({ source }: SafetyCheckScreenProps) {
   }
 
   return (
-    <div className="page-container flex min-h-[calc(100svh-124px)] flex-col pb-2 pt-5">
+    <div className="page-container flex min-h-[calc(100svh-124px)] flex-col pb-4 pt-5">
       <div className="text-center">
-        <div className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-[var(--orange-soft)] text-[var(--orange)] ring-1 ring-[#f7dfbd]">
+        <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[var(--orange-soft)] text-[var(--orange)] ring-1 ring-[#f7dfbd]">
           <ShieldIcon />
         </div>
 
@@ -125,7 +125,7 @@ export function SafetyCheckScreen({ source }: SafetyCheckScreenProps) {
         </p>
       </div>
 
-      <section className="mt-8 space-y-3" aria-label="자료 등록 안전 수칙">
+      <section className="mt-7 space-y-3" aria-label="자료 등록 안전 수칙">
         <InfoCard
           tone="orange"
           icon={<NoChaseIcon />}
@@ -143,12 +143,18 @@ export function SafetyCheckScreen({ source }: SafetyCheckScreenProps) {
       </section>
 
       <div className="mt-auto pt-8">
-        <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-[#dce7f1] bg-white px-4 py-3 text-sm font-bold text-[var(--navy)]">
+        <label
+          className={`flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm font-bold text-[var(--navy)] transition-colors focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-[var(--primary)] ${
+            confirmed
+              ? "border-[#8dd6c1] bg-[var(--mint-soft)]"
+              : "border-[#dce7f1] bg-white"
+          }`}
+        >
           <input
             type="checkbox"
             checked={confirmed}
             onChange={(event) => setConfirmed(event.target.checked)}
-            className="h-5 w-5 shrink-0 accent-[var(--orange)]"
+            className="h-5 w-5 shrink-0 accent-[var(--mint-dark)]"
           />
           <span>안전 수칙을 확인했어요.</span>
         </label>

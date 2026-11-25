@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
-  InfoCard,
   PrimaryButton,
   SectionLabel,
   StatusBadge,
@@ -59,18 +58,16 @@ export default function HumanReviewView() {
   return (
     <div className="page-container space-y-6 pb-10 pt-4">
       <header className="space-y-3">
-        <SectionLabel>HUMAN REVIEW</SectionLabel>
+        <SectionLabel>사용자 확인</SectionLabel>
         <h1 className="page-heading">
           AI의 예상 유형이
           <br />
           맞는지 확인해주세요.
         </h1>
+        <p className="page-subtitle">
+          실제 상황과 다르면 직접 선택하거나 수정할 수 있어요.
+        </p>
       </header>
-
-      <InfoCard tone="blue">
-        AI 분석은 참고용입니다. 실제 상황에 맞게 직접 선택하거나 수정할 수
-        있어요.
-      </InfoCard>
 
       <section
         className="rounded-2xl border border-[#d5e8fb] bg-[var(--primary-soft)] p-5"
@@ -81,7 +78,7 @@ export default function HumanReviewView() {
             id="ai-suggestion-title"
             className="text-xs font-extrabold tracking-[0.07em] text-[var(--primary)]"
           >
-            AI 예상 카드
+            AI가 제안한 유형
           </p>
           <StatusBadge tone="blue">AI 참고 분석</StatusBadge>
         </div>
@@ -89,7 +86,7 @@ export default function HumanReviewView() {
           {displayViolationType(selectedCandidate.type)}
         </p>
         <p className="mt-2 text-sm leading-6 text-[#607d99]">
-          원본 자료와 주변 상황을 직접 확인한 뒤 아래에서 선택해주세요.
+          원본 자료와 다르면 아래에서 다른 유형을 선택해주세요.
         </p>
       </section>
 
@@ -105,9 +102,9 @@ export default function HumanReviewView() {
                 key={option.value}
                 className={`flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
                   selected
-                    ? "border-[var(--primary)] bg-[var(--primary-soft)]"
+                    ? "border-[var(--primary)] bg-[var(--primary-soft)] ring-1 ring-[#b9d8f7]"
                     : "border-[#dce7f1] bg-white hover:border-[#a9c9ea]"
-                }`}
+                } focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-[var(--primary)]`}
               >
                 <input
                   type="radio"
@@ -167,7 +164,6 @@ export default function HumanReviewView() {
           fullWidth
           disabled={!canContinue}
           onClick={continueWithReviewedType}
-          trailingIcon={<span aria-hidden="true">→</span>}
         >
           이 유형으로 계속하기
         </PrimaryButton>

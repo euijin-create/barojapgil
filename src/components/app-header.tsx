@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { BrandLogo } from "@/components/brand-logo";
 
 type NavigationIconName = "home" | "new" | "reports" | "map" | "points";
 
@@ -79,30 +80,6 @@ function NavigationIcon({ name }: { name: NavigationIconName }) {
   );
 }
 
-function BrandMark() {
-  return (
-    <span className="app-header__brand-mark" aria-hidden="true">
-      <svg viewBox="0 0 28 28" fill="none" className="app-header__brand-icon">
-        <path
-          d="M7.5 22c5.3-2 8.6-4.7 8.6-8.8 0-2.4-1.3-4.2-3.5-5.5"
-          stroke="currentColor"
-          strokeWidth="2.8"
-          strokeLinecap="round"
-        />
-        <path
-          d="m9.2 10.2 3.4-2.5-3.9-1.8"
-          stroke="currentColor"
-          strokeWidth="2.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <circle cx="20.5" cy="8.2" r="1.8" fill="#bfe0ff" />
-        <circle cx="7.2" cy="22" r="1.8" fill="#bfe0ff" />
-      </svg>
-    </span>
-  );
-}
-
 function isCurrentPath(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/upload") return reportFlowPaths.has(pathname);
@@ -168,8 +145,12 @@ export function AppHeader() {
         </div>
 
         <Link href="/" aria-label="바로잡길 홈" className="app-header__brand">
-          <BrandMark />
-          <span className="app-header__brand-name">바로잡길</span>
+          <BrandLogo
+            variant="full"
+            decorative
+            preload
+            className="app-header__brand-logo"
+          />
         </Link>
 
         <div

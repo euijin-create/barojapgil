@@ -162,8 +162,8 @@ const STATUS_META: Record<
   missing: {
     label: "× 부족",
     tone: "neutral",
-    cardClassName: "border-[#e4dfe3] bg-[#fbf8fa]",
-    markClassName: "bg-[#f5eaef] text-[#a34b67]",
+    cardClassName: "border-[#f2ccd3] bg-[#fff8f9]",
+    markClassName: "bg-[#fdecef] text-[#b43f58]",
   },
 };
 
@@ -535,7 +535,6 @@ export function EvidenceDiagnosisView() {
       <PrimaryButton
         href="/package"
         fullWidth
-        trailingIcon={<span aria-hidden="true">→</span>}
       >
         AI 신고서 만들기
       </PrimaryButton>

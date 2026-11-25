@@ -161,6 +161,8 @@ supabase/
 
 - `src/app`: 라우팅, 메타데이터, 서버 데이터 조합, loading/error boundary
 - `src/components/ui`: Button, Field, Card, Dialog처럼 도메인을 모르는 재사용 UI
+- `src/components/brand-logo.tsx`: `public/brand`의 공식 가로형·아이콘 자산을 일관된 크기와 대체 텍스트로 제공
+- `public/brand`: 원본을 변경하지 않고 화면용으로 크롭·최적화한 공식 브랜드 자산
 - `src/features`: 한 기능에 필요한 작은 Client Component, 폼, hook, 표시 컴포넌트
 - `src/domain`: 순수 TypeScript 타입, 불변식, 상태 전이, 증거 정책
 - `src/application`: 사용 사례와 외부 의존성 포트, 화면에 필요한 최소 DTO

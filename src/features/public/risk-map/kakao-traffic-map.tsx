@@ -506,13 +506,13 @@ export function KakaoTrafficMap({
   return (
     <div className="space-y-2">
       <div
-        className="relative h-[58svh] min-h-[430px] max-h-[560px] overflow-hidden rounded-2xl border border-[#ccdbe8] bg-[#eaf0f5]"
+        className="relative h-[60svh] min-h-[440px] max-h-[620px] overflow-hidden rounded-[14px] border border-[#ccdbe8] bg-[#eaf0f5]"
         role="region"
         aria-label="서울 교통안전 지도"
       >
         <div
           ref={mapElementRef}
-          className="absolute inset-0 h-full w-full"
+          className="absolute inset-0 h-full w-full focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
           tabIndex={mapReady ? 0 : -1}
           aria-label="Kakao 지도. 드래그와 확대 또는 축소로 서울 지역을 살펴볼 수 있습니다."
         />

@@ -104,7 +104,7 @@ export function UploadScreen() {
   }
 
   return (
-    <div className="page-container space-y-7 pb-10 pt-4">
+    <div className="page-container space-y-6 pb-10 pt-4">
       <header className="space-y-3">
         <SectionLabel>사진·영상 등록</SectionLabel>
         <h1 className="page-heading">
@@ -139,7 +139,7 @@ export function UploadScreen() {
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="flex min-h-60 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#9ec4ed] bg-[#f7fbff] px-6 py-9 text-center transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]"
+          className="flex min-h-56 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#9ec4ed] bg-[#f7fbff] px-6 py-8 text-center transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary-soft)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
         >
           <span
             className="grid h-14 w-14 place-items-center rounded-xl bg-white text-[var(--primary)]"
@@ -154,9 +154,11 @@ export function UploadScreen() {
           </span>
           <span
             id="supported-file-types"
-            className="mt-2 text-xs font-semibold tracking-wide text-[var(--ink-muted)]"
+            className="mt-2 text-xs font-semibold leading-5 text-[var(--ink-muted)]"
           >
-            JPG, PNG, WEBP, MP4, MOV
+            JPG, PNG, WEBP · 각 10MB 이하
+            <br />
+            MP4, MOV · 100MB 이하
           </span>
         </button>
 
@@ -178,7 +180,7 @@ export function UploadScreen() {
               선택한 자료
             </h2>
             <StatusBadge tone={mediaKind === "video" ? "orange" : "blue"}>
-              {mediaKind === "video" ? "영상 데모" : `사진 ${selectedFiles.length}장`}
+              {mediaKind === "video" ? "영상 · 데모" : `사진 ${selectedFiles.length}장`}
             </StatusBadge>
           </div>
           <div className="surface-card space-y-4 p-4">
@@ -247,13 +249,17 @@ export function UploadScreen() {
       ) : null}
 
       <InfoCard tone="blue" title="개인정보 보호 안내">
-        <p>신고 목적 외 영상 공개는 금지됩니다.</p>
-        <p className="mt-2">
-          대표 사진 1장은 분석을 위해 서버로 일시 전송되며 저장하지 않아요.
-          모의 분석에서는 외부 AI로 보내지 않고, OpenAI 분석 설정일 때만
-          제공자에 전달해요. 영상과 추가 사진은 현재 분석 API로 전송하지
-          않아요.
-        </p>
+        <p>자료는 신고 준비와 분석에만 사용하고 공개하지 마세요.</p>
+        <details className="mt-2">
+          <summary className="min-h-11 cursor-pointer py-2 text-sm font-extrabold text-[var(--primary-dark)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]">
+            처리 방식 자세히 보기
+          </summary>
+          <p className="border-t border-[#d8e9f8] pt-3">
+            대표 사진 1장은 분석을 위해 서버로 일시 전송되며 저장하지
+            않아요. 모의 분석에서는 외부 AI로 보내지 않고, 영상과 추가
+            사진은 현재 분석 API로 전송하지 않아요.
+          </p>
+        </details>
       </InfoCard>
 
       <PrimaryButton
@@ -261,7 +267,6 @@ export function UploadScreen() {
         onClick={beginAnalysis}
         disabled={!selectedFile || Boolean(error)}
         fullWidth
-        trailingIcon={<span aria-hidden="true">→</span>}
       >
         선택한 자료 분석하기
       </PrimaryButton>

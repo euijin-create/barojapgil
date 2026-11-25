@@ -4,12 +4,12 @@ import ReportsView from "@/features/public/reports-view";
 
 export default function ReportsPage() {
   return (
-    <div className="page-container space-y-7 pb-10 pt-4">
+    <div className="page-container space-y-7 pb-10 pt-2">
       <header>
-        <SectionLabel>MY REPORTS</SectionLabel>
+        <SectionLabel tone="neutral">신고 준비 내역</SectionLabel>
         <h1 className="page-heading mt-3">내 신고</h1>
         <p className="page-subtitle mt-3">
-          신고 준비부터 직접 제출한 내역까지 상태를 확인하세요.
+          분석 중인 자료와 신고 준비 상태를 확인할 수 있어요.
         </p>
       </header>
 
@@ -19,7 +19,7 @@ export default function ReportsPage() {
         href="/upload"
         className="button-primary flex w-full items-center justify-center"
       >
-        새 신고 준비하기
+        새 자료 분석하기
       </Link>
     </div>
   );
